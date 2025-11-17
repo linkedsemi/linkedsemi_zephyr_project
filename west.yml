@@ -1,0 +1,31 @@
+manifest:
+
+  remotes:
+    - name: linkedsemi
+      url-base: https://github.com/linkedsemi
+
+  projects:
+    - name: zephyr
+      remote: linkedsemi
+      revision: linkedsemi
+      import:
+        name-allowlist:
+          - picolibc
+          - fatfs
+          - littlefs
+    - name: LS_SDK
+      revision: qsh
+      remote: linkedsemi
+      path: modules/hal/linkedsemi
+      groups:
+        - hal
+    - name: mbedtls
+      revision: linkedsemi
+      remote: linkedsemi
+      path: modules/crypto/mbedtls
+      groups:
+        - crypto
+    - name: wolfssl
+      revision: linkedsemi
+      remote: linkedsemi
+      path: modules/lib/wolfssl
