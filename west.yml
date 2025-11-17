@@ -10,7 +10,6 @@ manifest:
       revision: linkedsemi
       import:
         name-allowlist:
-          - picolibc
           - fatfs
           - littlefs
     - name: LS_SDK
