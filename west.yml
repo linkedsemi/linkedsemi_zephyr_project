@@ -7,24 +7,24 @@ manifest:
   projects:
     - name: zephyr
       remote: linkedsemi
-      revision: linkedsemi
+      revision: 2b10ae63249d1daf20c1fa40367a46fe917a3c3a
       import:
         name-allowlist:
           - fatfs
           - littlefs
     - name: LS_SDK
-      revision: qsh
+      revision: 5f76f727c6fb1ceba11ee24615397ba53c313bd2
       remote: linkedsemi
       path: modules/hal/linkedsemi
       groups:
         - hal
     - name: mbedtls
-      revision: linkedsemi
+      revision: a8be860ee1686013afd1fa27435d87b56c1f60d9
       remote: linkedsemi
       path: modules/crypto/mbedtls
       groups:
         - crypto
     - name: wolfssl
-      revision: linkedsemi
+      revision: 37e79a9f6151bb95b7320a4eed7abb845c0f66ea
       remote: linkedsemi
       path: modules/lib/wolfssl
