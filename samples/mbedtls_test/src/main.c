@@ -1218,6 +1218,7 @@ int main(void)
     if(ecdsa_test() !=0)
     {
         printf("ECDSA  test failed!\n");
+        goto end;
     }else
     {
         printf("ECDSA  test passed!\n");
@@ -1230,6 +1231,8 @@ int main(void)
         printf("SHA-224  test failed!\n");
 #if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
         printf("otbn not sopported sha224\n");
+#else
+        goto end;
 #endif
     }else{
         printf("SHA-224  test passed!\n");
@@ -1238,6 +1241,7 @@ int main(void)
     if(test_sha256() != 0)
     {
         printf("SHA-256  test failed!\n");
+        goto end;
     }else{
         printf("SHA-256  test passed!\n");
     }
@@ -1245,13 +1249,15 @@ int main(void)
     if(test_sm3() != 0)
     {
         printf("SM3  test failed!\n");
+        goto end;
     }else{
         printf("SM3  test passed!\n");
     }
-
+#if defined(CONFIG_MBEDTLS_SHA224_SHA256_SM3_LINKEDSEMI_HARDWARE_ALT)
     if(test_sha224_dma() != 0)
     {
         printf("SHA-224 dma mode test failed!\n");
+        goto end;
     }else{
         printf("SHA-224 dma mode test passed!\n");
     }
@@ -1259,6 +1265,7 @@ int main(void)
     if(test_sha256_dma() != 0)
     {
         printf("SHA-256 dma mode test failed!\n");
+        goto end;
     }else{
         printf("SHA-256 dma mode test passed!\n");
     }
@@ -1266,13 +1273,15 @@ int main(void)
     if(test_sm3_dma() != 0)
     {
         printf("SM3 dma test failed!\n");
+        goto end;
     }else{
         printf("SM3 dma test passed!\n");
     }
-
+#endif
     if(aes_test() != 0)
     {
         printf("AES  test failed!\n");
+        goto end;
     }else{
         printf("AES  test passed!\n");
     }
@@ -1281,6 +1290,7 @@ int main(void)
     if(test_sha384() != 0)
     {
         printf("SHA-384  test failed!\n");
+        goto end;
     }else{
         printf("SHA-384  test passed!\n");
     }
@@ -1288,6 +1298,7 @@ int main(void)
     if(test_sha512() != 0)
     {
         printf("SHA-512  test failed!\n");
+        goto end;
     }else{
         printf("SHA-512  test passed!\n");
     }
@@ -1295,6 +1306,7 @@ int main(void)
     if(test_sm4() != 0)
     {
         printf("sm4 test failed!\n");
+        goto end;
     }else{
         printf("sm4  test passed!\n");
     }
@@ -1302,9 +1314,13 @@ int main(void)
     if(sm4_ctr_test() != 0)
     {
         printf("sm4_ctr_test failed!\n");
+        goto end;
     }else{
         printf("sm4_ctr_test passed!\n");
     }
 
+    printf("test succeed\n");
+end:
+    printf("test end\n");
     return 0;
 }

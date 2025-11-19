@@ -25,10 +25,28 @@
  *
  ************************************************************/
 #define DIGEST_SIZE         64
-#if (DT_NODE_HAS_STATUS(DT_NODELABEL(cpu1), okay))
-const static struct device *trng = DEVICE_DT_GET(DT_NODELABEL(trng0));
-#endif
+static uint8_t fix_trng_output[DIGEST_SIZE] = { 0xcc, 0xbb, 0xaa};
+#if DT_HAS_CHOSEN(zephyr_entropy)
+#if !defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_DELEGATION_CLIENT)
 
+const static struct device *trng = DEVICE_DT_GET(DT_CHOSEN(zephyr_entropy));
+int ls_mbedtls_get_random(void *null, unsigned char *buf, size_t size)
+{
+    return entropy_get_entropy(trng, buf, size);
+}
+#endif
+#else
+extern void z_impl_sys_rand_get(void *dst, size_t outlen);
+int ls_mbedtls_get_random(void *null, unsigned char *buf, size_t size)
+{
+
+    /* Fix pRndBuf by shifting it left if necessary */
+    memcpy(buf,fix_trng_output,size);
+    
+    return 0;
+}
+
+#endif
 
 #define STACK_SIZE (1024)
 static struct k_thread otbn_thread1;
@@ -36,18 +54,11 @@ static struct k_thread otbn_thread2;
 K_THREAD_STACK_DEFINE(tstack1, STACK_SIZE);
 K_THREAD_STACK_DEFINE(tstack2, STACK_SIZE);
 
-static uint8_t fix_trng_output[DIGEST_SIZE];
+
 int ecdsa_test(void);
 
-int mbedtls_get_random(void *null, unsigned char *buf, size_t size)
-{
-    (void)null;
-#if (DT_NODE_HAS_STATUS(DT_NODELABEL(cpu1), okay))
-    return entropy_get_entropy(trng, buf, size);
-#else
-    return 0;
-#endif
-}
+// int ls_mbedtls_get_random(void *null, unsigned char *buf, size_t size)
+
 
 void otbn_task1_func(void *p1, void *p2, void *p3)
 {
@@ -135,9 +146,8 @@ int ecdsa_p256_test(void)
     mbedtls_mpi sCheck;
 
     uint8_t hash_buf[100];
-    uint8_t radom_buf[100];
     unsigned char *pHash = hash_buf;
-    unsigned char *pRndBuf = radom_buf;
+    unsigned char *pRndBuf = fix_trng_output;
 
     size_t hlen;
     mbedtls_ecp_group_init(&pGrp);
@@ -174,10 +184,10 @@ int ecdsa_p256_test(void)
         pRndBuf[rnd_length - 1] <<= shift;
     }
 
-    memcpy(fix_trng_output,pRndBuf,DIGEST_SIZE);
+    // memcpy(fix_trng_output,pRndBuf,DIGEST_SIZE);
 
 
-    if(mbedtls_ecdsa_sign(&pGrp, &r, &s, &d, pHash, hlen, mbedtls_get_random, NULL) != 0)
+    if(mbedtls_ecdsa_sign(&pGrp, &r, &s, &d, pHash, hlen, ls_mbedtls_get_random, NULL) != 0)
     {
         while(1);
     }
@@ -204,6 +214,7 @@ int ecdsa_p256_test(void)
     mbedtls_mpi_free(&rCheck);
     mbedtls_mpi_free(&sCheck);
 
+    printf("p256 test succeed\n");
     return rc;
 }
 
@@ -231,7 +242,7 @@ int ecdsa_test_curve(mbedtls_ecp_group_id curve)
     mbedtls_mpi_init(&s);
 
     // generator key pairs 
-    err = mbedtls_ecdsa_genkey(&ctx,curve,mbedtls_get_random,NULL);
+    err = mbedtls_ecdsa_genkey(&ctx,curve,ls_mbedtls_get_random,NULL);
     if(err)
     {
         printf(" ecc keygen failed \r\n");
@@ -242,7 +253,7 @@ int ecdsa_test_curve(mbedtls_ecp_group_id curve)
     size_t hlen;
     hlen = runIt_unhexify(pHash, hash_str);
     // sign
-    if(mbedtls_ecdsa_sign(&ctx.private_grp, &r, &s, &ctx.private_d, pHash, hlen, ls_trng_get_random, NULL) != 0)
+    if(mbedtls_ecdsa_sign(&ctx.private_grp, &r, &s, &ctx.private_d, pHash, hlen, ls_mbedtls_get_random, NULL) != 0)
     {
         err = -1;
         printf(" ecdsa sign failed\n");
@@ -272,7 +283,7 @@ exit_test:
 int ecdsa_test(void)
 {
     int ret = 0;
-
+    ecdsa_p256_test();
     if(ecdsa_test_curve(MBEDTLS_ECP_DP_SECP384R1) != 0)
     {
         ret = -1;
