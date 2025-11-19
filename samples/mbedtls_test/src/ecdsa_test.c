@@ -24,7 +24,7 @@
  * defines
  *
  ************************************************************/
-#define DIGEST_SIZE         64
+#define DIGEST_SIZE         66
 static uint8_t fix_trng_output[DIGEST_SIZE] = { 0xcc, 0xbb, 0xaa};
 #if DT_HAS_CHOSEN(zephyr_entropy)
 #if !defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_DELEGATION_CLIENT)
@@ -41,12 +41,24 @@ int ls_mbedtls_get_random(void *null, unsigned char *buf, size_t size)
 {
 
     /* Fix pRndBuf by shifting it left if necessary */
-    memcpy(buf,fix_trng_output,size);
+    for(uint16_t i = 0; i < size; i++)
+    {
+        buf[i] = 0x55 * i;
+    }
     
     return 0;
 }
 
 #endif
+
+int ls_mbedtls_get_fixed(void *null, unsigned char *buf, size_t size)
+{
+
+    /* Fix pRndBuf by shifting it left if necessary */
+    memcpy(buf,fix_trng_output,size);
+    
+    return 0;
+}
 
 #define STACK_SIZE (1024)
 static struct k_thread otbn_thread1;
@@ -187,7 +199,7 @@ int ecdsa_p256_test(void)
     // memcpy(fix_trng_output,pRndBuf,DIGEST_SIZE);
 
 
-    if(mbedtls_ecdsa_sign(&pGrp, &r, &s, &d, pHash, hlen, ls_mbedtls_get_random, NULL) != 0)
+    if(mbedtls_ecdsa_sign(&pGrp, &r, &s, &d, pHash, hlen, ls_mbedtls_get_fixed, NULL) != 0)
     {
         while(1);
     }
@@ -284,6 +296,7 @@ int ecdsa_test(void)
 {
     int ret = 0;
     ecdsa_p256_test();
+    memset(fix_trng_output,0x55,DIGEST_SIZE);
     if(ecdsa_test_curve(MBEDTLS_ECP_DP_SECP384R1) != 0)
     {
         ret = -1;
