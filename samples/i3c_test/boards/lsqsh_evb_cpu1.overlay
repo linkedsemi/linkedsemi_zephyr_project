@@ -1,33 +1,39 @@
 
-&i3c14 {
-    // i3c-scl-hz = <1000000>;
-    // i2c-scl-hz = <400000>;
-    interrupts = <I3C14_IRQN 4>;
+&i3c12 {
+    interrupts = <I3C12_IRQN 7>;
     is-secondary;
     status = "okay";
-
-    // own-dynamic_address = <0x38>;
     tgt-pid = <0x0208 0x13811000>;
     dcr = <0x4>;
     bcr = <0x06>;
 
     pinctrl-0 = <
-        &i3c14_scl_pk10
-        &i3c14_sda_pk11
+        &i3c12_scl_pk06
+        &i3c12_sda_pk07
     >;
     pinctrl-names = "default";
 };
 
+&i3c13_scl_pk08 {
+    drive-strength = <3>;
+    bias-pull-up2;
+};
+&i3c13_sda_pk09 {
+    drive-strength = <3>;
+    bias-pull-up2;
+};
+
 &i3c13 {
-    i3c-scl-hz = <1000000>;
-    // i2c-scl-hz = <400000>;
+    i3c-scl-hz = <12500000>;
+    i2c-scl-hz = <400000>;
     status = "okay";
     
     own-dynamic_address = <0x38>;
     tgt-pid = <0x5 0x55>;
     dcr = <0x4>;
     bcr = <0x42>;
-
+    // I3C设备默认中断优先级为7，也就是clic中断控制器的最高优先级，但是当I3C主从机相互连接对测时，需要确保从机的优先级比主机高，所以将主机的优先级降为6.
+    interrupts = <I3C13_IRQN 6>;
 
     pinctrl-0 = <
         &i3c13_scl_pk08
