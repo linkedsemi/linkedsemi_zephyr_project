@@ -1,0 +1,12 @@
+&sdhci1 {
+    max-bus-freq = <DT_FREQ_M(200)>;
+    status = "okay";
+
+    mmc_disk1: disk {
+        compatible = "zephyr,mmc-disk";
+        /* samples/subsys/fs/fs_sample/ assert disk-name to SD2 */
+        disk-name = "SD2";
+        bus-width = <8>;
+        status = "okay";
+    };
+};

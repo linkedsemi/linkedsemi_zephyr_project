@@ -4,13 +4,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(main, CONFIG_SOC_LOG_LEVEL);
 
 #include "mmc.c"
 
 #define TASK_STACK_SIZE         4096
 #define PRIORITY                7
-static struct k_thread temp_id;
-K_THREAD_STACK_DEFINE(temp_stack, TASK_STACK_SIZE);
+static struct k_thread test_emmc_id;
+K_THREAD_STACK_DEFINE(test_emmc_stack, TASK_STACK_SIZE);
 
 /**
  * @file
@@ -49,12 +52,13 @@ static int enable_usb_device_next(void)
 
 int main(void)
 {
+	LOG_INF("zperf");
 #if defined(CONFIG_USB_DEVICE_STACK)
 	int ret;
 
 	ret = usb_enable(NULL);
 	if (ret != 0) {
-		printk("usb enable error %d\n", ret);
+		LOG_INF("usb enable error %d\n", ret);
 	}
 
 	(void)net_config_init_app(NULL, "Initializing network");
@@ -77,11 +81,11 @@ int main(void)
 #endif
 
 #if !DT_NODE_HAS_STATUS(DT_NODELABEL(cpu1), okay)
-	k_thread_create(&temp_id, temp_stack, TASK_STACK_SIZE,
-		monitor_temperature_func, NULL, NULL, NULL, PRIORITY,
+	k_thread_create(&test_emmc_id, test_emmc_stack, TASK_STACK_SIZE,
+		test_emmc_entry, NULL, NULL, NULL, PRIORITY,
 		K_INHERIT_PERMS, K_FOREVER);
-	k_thread_name_set(&temp_id, "emmc test");
-	k_thread_start(&temp_id);
+	k_thread_name_set(&test_emmc_id, "emmc test");
+	k_thread_start(&test_emmc_id);
 #endif
 
 	return 0;
