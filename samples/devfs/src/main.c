@@ -95,12 +95,12 @@ static int jtag_get_freq(int fd)
     return freq;
 }
 
-static int gd32_read_id_code(const struct shell *shell, size_t argc, char **argv, void *data)
+static int jtag_fs_test(const struct shell *shell, size_t argc, char **argv, void *data)
 {
     static uint8_t gd32_id_code[4] = {0x3d,0x56,0x0,0x10};  //GD32 id-code：0x1000563d
     enum jtag_tapstate state;
     uint32_t id_code;
-    int fd = open("/dev/jtag/jtag3", O_RDWR);
+    int fd = open("/dev/jtag3", O_RDWR);
 
     if (fd > 0)
     {
@@ -124,8 +124,38 @@ static int gd32_read_id_code(const struct shell *shell, size_t argc, char **argv
 
     return 0;
 }
-SHELL_CMD_REGISTER(gd32_read_id_code, NULL, "gd32_read_id_code", gd32_read_id_code);
+SHELL_CMD_REGISTER(jtag_fs_test, NULL, "jtag_fs_test", jtag_fs_test);
 
+static int uart_fs_test(const struct shell *shell, size_t argc, char **argv, void *data)
+{
+    int fd = open("/dev/uart1", O_RDWR);
+
+    if (fd > 0)
+    {
+        ioctl(fd, 1);
+        ioctl(fd, 2);
+        close(fd);
+    }
+
+    fd = open("/dev/uart2", O_RDWR);
+    if (fd > 0)
+    {
+        ioctl(fd, 1);
+        ioctl(fd, 2);
+        close(fd);
+    }
+
+    fd = open("/dev/uart/uart3", O_RDWR);
+    if (fd > 0)
+    {
+        ioctl(fd, 1);
+        ioctl(fd, 2);
+        close(fd);
+    }
+
+    return 0;
+}
+SHELL_CMD_REGISTER(uart_fs_test, NULL, "uart_fs_test", uart_fs_test);
 
 static int i2c_fs_test(const struct shell *shell, size_t argc, char **argv, void *data)
 {
@@ -173,37 +203,6 @@ static int i2c_fs_test(const struct shell *shell, size_t argc, char **argv, void
     return 0;
 }
 SHELL_CMD_REGISTER(i2c_fs_test, NULL, "i2c_fs_test", i2c_fs_test);
-
-static int uart_fs_test(const struct shell *shell, size_t argc, char **argv, void *data)
-{
-    int fd = open("/dev/uart1", O_RDWR);
-
-    if (fd > 0)
-    {
-        ioctl(fd, 1);
-        ioctl(fd, 2);
-        close(fd);
-    }
-
-    fd = open("/dev/uart2", O_RDWR);
-    if (fd > 0)
-    {
-        ioctl(fd, 1);
-        ioctl(fd, 2);
-        close(fd);
-    }
-
-    fd = open("/dev/uart/uart3", O_RDWR);
-    if (fd > 0)
-    {
-        ioctl(fd, 1);
-        ioctl(fd, 2);
-        close(fd);
-    }
-
-    return 0;
-}
-SHELL_CMD_REGISTER(uart_fs_test, NULL, "uart_fs_test", uart_fs_test);
 
 int main(void)
 {
