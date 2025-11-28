@@ -46,6 +46,9 @@
 #include <wolfssl/wolfcrypt/ecc.h>
 
 #include "examples/echoserver/echoserver.h"
+#include <zephyr/shell/shell.h>
+
+#define SHELL_HELP_EXIT			"Exit."
 
 #if defined(WOLFSSL_PTHREADS) && defined(WOLFSSL_TEST_GLOBAL_REQ)
     #include <pthread.h>
@@ -892,7 +895,7 @@ static int ssh_worker(thread_ctx_t* threadCtx)
             #endif
         }
         else
-            ChildRunning = 1;
+        ChildRunning = 1;
 #else
         ChildRunning = 1;
 #endif
@@ -1136,8 +1139,8 @@ static int ssh_worker(thread_ctx_t* threadCtx)
                                         cnt_r, err);
                             #endif
                             break;
-                        }
-                    }
+        }
+    }
                     else {
                         #ifdef SHELL_DEBUG
                             buf_dump(threadCtx->shellBuffer, cnt_r);
@@ -3193,3 +3196,12 @@ static int enable_shell_ssh(void)
 }
 
 SYS_INIT(enable_shell_ssh, POST_KERNEL, CONFIG_SHELL_BACKEND_WOLFSSH_INIT_PRIORITY);
+
+static int cmd_exit(const struct shell *sh, size_t argc, char **argv)
+{
+        return wolfSSH_SendDisconnect(sh_ssh->ssh,
+                    WOLFSSH_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE);
+}
+
+SHELL_COND_CMD_ARG_REGISTER(CONFIG_SHELL_VT100_COMMANDS, exit, NULL,
+			    SHELL_HELP_EXIT, cmd_exit, 1, 0);
