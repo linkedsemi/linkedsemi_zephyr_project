@@ -126,6 +126,85 @@ static int gd32_read_id_code(const struct shell *shell, size_t argc, char **argv
 }
 SHELL_CMD_REGISTER(gd32_read_id_code, NULL, "gd32_read_id_code", gd32_read_id_code);
 
+
+static int i2c_fs_test(const struct shell *shell, size_t argc, char **argv, void *data)
+{
+    int fd = open("/dev/i2c1", O_RDWR);
+    char read_buf[16];
+
+    if (fd > 0)
+    {
+        ioctl(fd, 1);
+        ioctl(fd, 2);
+
+        write(fd, "write i2c1", strlen("write i2c1"));
+        int len = read(fd, read_buf, 16);
+        printk("read len: %d, read buf: %s\n", len, read_buf);
+
+        close(fd);
+    }
+
+    fd = open("/dev/i2c2", O_RDWR);
+    if (fd > 0)
+    {
+        ioctl(fd, 1);
+        ioctl(fd, 2);
+
+        write(fd, "write i2c2", strlen("write i2c2"));
+        int len = read(fd, read_buf, 16);
+        printk("read len: %d, read buf: %s\n", len, read_buf);
+
+        close(fd);
+    }
+
+    fd = open("/dev/i2c/i2c3", O_RDWR);
+    if (fd > 0)
+    {
+        ioctl(fd, 1);
+        ioctl(fd, 2);
+
+        write(fd, "write i2c3", strlen("write i2c3"));
+        int len = read(fd, read_buf, 16);
+        printk("read len: %d, read buf: %s\n", len, read_buf);
+
+        close(fd);
+    }
+
+    return 0;
+}
+SHELL_CMD_REGISTER(i2c_fs_test, NULL, "i2c_fs_test", i2c_fs_test);
+
+static int uart_fs_test(const struct shell *shell, size_t argc, char **argv, void *data)
+{
+    int fd = open("/dev/uart1", O_RDWR);
+
+    if (fd > 0)
+    {
+        ioctl(fd, 1);
+        ioctl(fd, 2);
+        close(fd);
+    }
+
+    fd = open("/dev/uart2", O_RDWR);
+    if (fd > 0)
+    {
+        ioctl(fd, 1);
+        ioctl(fd, 2);
+        close(fd);
+    }
+
+    fd = open("/dev/uart/uart3", O_RDWR);
+    if (fd > 0)
+    {
+        ioctl(fd, 1);
+        ioctl(fd, 2);
+        close(fd);
+    }
+
+    return 0;
+}
+SHELL_CMD_REGISTER(uart_fs_test, NULL, "uart_fs_test", uart_fs_test);
+
 int main(void)
 {
     return 0;
