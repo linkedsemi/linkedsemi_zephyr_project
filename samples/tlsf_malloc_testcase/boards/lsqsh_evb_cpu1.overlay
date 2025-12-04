@@ -1,0 +1,4 @@
+&psram {
+    status = "okay";
+};
+
