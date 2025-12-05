@@ -13,9 +13,9 @@
 &smbus1 {
     status = "okay";
     
-    mp5023: mp5023@58 {
+    mp5023: mp5023@40 {
         compatible = "mps,mp5023";
-        reg = <0x58>;
+        reg = <0x40>;
         status = "okay";
         smbus-max-frequency = <100000>;
     };

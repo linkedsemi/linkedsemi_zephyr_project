@@ -16,10 +16,12 @@ LOG_MODULE_REGISTER(mp5023_app, LOG_LEVEL_INF);
 #define DT_DRV_COMPAT mps_mp5023
 
 // 定义设备标签名称
-#define MP5023_DEVICE_NAME "mp5023@58"
+// #define MP5023_DEVICE_NAME "mp5023@58"
+#define MP5023_DEV_NODE DT_NODELABEL(mp5023)
 
 void main(void) {
-  const struct device *dev = device_get_binding(MP5023_DEVICE_NAME);
+  // const struct device *dev = device_get_binding(MP5023_DEVICE_NAME);
+  const struct device *dev = DEVICE_DT_GET(MP5023_DEV_NODE);
   struct sensor_value voltage, current, temp;
   uint8_t retry = 0;
 
@@ -28,12 +30,12 @@ void main(void) {
       (const struct sensor_driver_api *)dev->api; */
   int ret;
   if (NULL == dev) {
-    LOG_ERR("Failed to get MP5023 device binding");
+    LOG_ERROR("Failed to get MP5023 device binding");
     return;
   }
 
   if (!device_is_ready(dev)) {
-    LOG_ERR("Device %s is not ready", dev->name);
+    LOG_ERROR("Device %s is not ready", dev->name);
     return;
   }
 
@@ -44,7 +46,7 @@ void main(void) {
     // ret = mp5023_api->sample_fetch(dev, SENSOR_CHAN_ALL);
     ret = sensor_sample_fetch(dev); /* general sensor api */
     if (ret < 0) {
-      LOG_ERR("Failed to fetch samples: %d", ret);
+      LOG_ERROR("Failed to fetch samples: %d", ret);
       continue;
     }
 
@@ -52,19 +54,19 @@ void main(void) {
     // ret = mp5023_api->channel_get(dev, SENSOR_CHAN_VOLTAGE, &voltage);
     ret = sensor_channel_get(dev, SENSOR_CHAN_VOLTAGE, &voltage);
     if (ret < 0) {
-      LOG_ERR("Failed to get voltage: %d", ret);
+      LOG_ERROR("Failed to get voltage: %d", ret);
     }
 
     // ret = mp5023_api->channel_get(dev, SENSOR_CHAN_CURRENT, &current);
     ret = sensor_channel_get(dev, SENSOR_CHAN_CURRENT, &current);
     if (ret < 0) {
-      LOG_ERR("Failed to get current: %d", ret);
+      LOG_ERROR("Failed to get current: %d", ret);
     }
 
     // ret = mp5023_api->channel_get(dev, SENSOR_CHAN_GAUGE_TEMP, &temp);
     ret = sensor_channel_get(dev, SENSOR_CHAN_GAUGE_TEMP, &temp);
     if (ret < 0) {
-      LOG_ERR("Failed to get temperature: %d", ret);
+      LOG_ERROR("Failed to get temperature: %d", ret);
     }
 
     LOG_INF("Voltage: %d.%06d V", voltage.val1, voltage.val2);
