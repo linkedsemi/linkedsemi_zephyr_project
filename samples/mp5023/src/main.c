@@ -26,12 +26,12 @@ void main(void) {
 
   int ret;
   if (NULL == dev) {
-    LOG_ERROR("Failed to get MP5023 device binding");
+    LOG_ERR("Failed to get MP5023 device binding");
     return;
   }
 
   if (!device_is_ready(dev)) {
-    LOG_ERROR("Device %s is not ready", dev->name);
+    LOG_ERR("Device %s is not ready", dev->name);
     return;
   }
 
@@ -41,26 +41,26 @@ void main(void) {
     /* Fetch all sensor data - 5023 specific sensor driver */
     ret = sensor_sample_fetch(dev); /* general sensor api */
     if (ret < 0) {
-      LOG_ERROR("Failed to fetch samples: %d", ret);
+      LOG_ERR("Failed to fetch samples: %d", ret);
       continue;
     }
 
     /* Get voltage, current and temperature data */
     ret = sensor_channel_get(dev, SENSOR_CHAN_VOLTAGE, &voltage);
     if (ret < 0) {
-      LOG_ERROR("Failed to get voltage: %d", ret);
+      LOG_ERR("Failed to get voltage: %d", ret);
     }
 
     // ret = mp5023_api->channel_get(dev, SENSOR_CHAN_CURRENT, &current);
     ret = sensor_channel_get(dev, SENSOR_CHAN_CURRENT, &current);
     if (ret < 0) {
-      LOG_ERROR("Failed to get current: %d", ret);
+      LOG_ERR("Failed to get current: %d", ret);
     }
 
     // ret = mp5023_api->channel_get(dev, SENSOR_CHAN_GAUGE_TEMP, &temp);
     ret = sensor_channel_get(dev, SENSOR_CHAN_GAUGE_TEMP, &temp);
     if (ret < 0) {
-      LOG_ERROR("Failed to get temperature: %d", ret);
+      LOG_ERR("Failed to get temperature: %d", ret);
     }
 
     power = (voltage.val1 + voltage.val2 / 1000000.0f) *
