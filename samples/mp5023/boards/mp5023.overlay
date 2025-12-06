@@ -4,18 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-&i2c1 {
+&i2c7 {
     status = "okay";
     //clock-frequency = <100000>;
     bus-frequency = <100000>;
 };
 
-&smbus1 {
+&smbus7 {
     status = "okay";
     
-    mp5023: mp5023@58 {
+    mp5023: mp5023@40 {
         compatible = "mps,mp5023";
-        reg = <0x58>;
+        reg = <0x40>;
         status = "okay";
         smbus-max-frequency = <100000>;
     };
