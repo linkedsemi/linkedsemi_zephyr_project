@@ -28,3 +28,6 @@ manifest:
       revision: 37e79a9f6151bb95b7320a4eed7abb845c0f66ea
       remote: linkedsemi
       path: modules/lib/wolfssl
+    - name: wolfssh
+      remote: linkedsemi
+      path: modules/lib/wolfssh
