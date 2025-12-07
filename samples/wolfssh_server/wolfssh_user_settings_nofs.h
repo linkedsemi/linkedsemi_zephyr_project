@@ -62,6 +62,9 @@ extern "C" {
 #undef NO_FILESYSTEM
 #define NO_FILESYSTEM
 
+#undef WOLFSSH_NO_RSA
+#define WOLFSSH_NO_RSA
+
 #ifdef __cplusplus
 }
 #endif

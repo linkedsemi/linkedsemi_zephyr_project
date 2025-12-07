@@ -132,6 +132,12 @@ extern "C" {
 #undef NO_FILESYSTEM
 #define NO_FILESYSTEM
 
+#undef WOLFSSL_WOLFSSH
+#define WOLFSSL_WOLFSSH
+
+#undef  WOLFSSL_SMALL_STACK
+#define WOLFSSL_SMALL_STACK
+
 #ifdef __cplusplus
 }
 #endif
