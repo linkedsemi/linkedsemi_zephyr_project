@@ -133,9 +133,9 @@ static int test_fragment_allocate()
 {
     printf("\n=== Test fragmentation ===\n");
 
-    void *a = malloc(100);
-    void *b = malloc(200);
-    void *c = malloc(300);
+    void *a = malloc(1536);
+    void *b = malloc(2536);
+    void *c = malloc(7656);
 
     CHECK(a && b && c, "allocate a,b,c");
     CHECK_ALIGN(a, "a aligned");
@@ -144,7 +144,7 @@ static int test_fragment_allocate()
 
     free(b); // 制造碎片
 
-    void *d = malloc(150);
+    void *d = malloc(1025);
     CHECK(d != NULL, "malloc 150 in fragmented space");
     CHECK_ALIGN(d, "d aligned");
 
