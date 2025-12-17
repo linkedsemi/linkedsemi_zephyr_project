@@ -20,9 +20,9 @@ LOG_MODULE_REGISTER(mp5023_app, LOG_LEVEL_INF);
 
 void main(void) {
   const struct device *dev = DEVICE_DT_GET(MP5023_DEV_NODE);
-  struct sensor_value voltage, current, temp;
+  struct sensor_value voltage, current, temp, power;
   uint8_t retry = 0;
-  float power;
+  // float power;
 
   int ret;
   if (NULL == dev) {
@@ -51,6 +51,12 @@ void main(void) {
       LOG_ERR("Failed to get voltage: %d", ret);
     }
 
+    /* Get voltage, current and temperature data */
+    ret = sensor_channel_get(dev, SENSOR_CHAN_POWER, &power);
+    if (ret < 0) {
+      LOG_ERR("Failed to get power: %d", ret);
+    }
+
     // ret = mp5023_api->channel_get(dev, SENSOR_CHAN_CURRENT, &current);
     ret = sensor_channel_get(dev, SENSOR_CHAN_CURRENT, &current);
     if (ret < 0) {
@@ -63,13 +69,13 @@ void main(void) {
       LOG_ERR("Failed to get temperature: %d", ret);
     }
 
-    power = (voltage.val1 + voltage.val2 / 1000000.0f) *
-            (current.val1 + current.val2 / 1000000.0f);
+    // power = (voltage.val1 + voltage.val2 / 1000000.0f) *
+    //         (current.val1 + current.val2 / 1000000.0f);
 
-    LOG_INF("Voltage: %d.%06d V", voltage.val1, voltage.val2);
-    LOG_INF("Current: %d.%06d A", current.val1, current.val2);
-    LOG_INF("Power: %.6f W", power);
-    LOG_INF("Temperature: %d.%06d °C", temp.val1, temp.val2);
+    LOG_INF("Voltage raw: %d", voltage.val1);
+    LOG_INF("Current raw: %d", current.val1);
+    LOG_INF("Power raw: %d ", power.val1);
+    LOG_INF("Temperature raw: %d", temp.val1);
 
     k_sleep(K_SECONDS(1));
     retry++;
