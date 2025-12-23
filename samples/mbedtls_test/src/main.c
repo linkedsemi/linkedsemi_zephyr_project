@@ -457,6 +457,7 @@ static int aes_ecb_test()
     }
 
 exit:
+    mbedtls_aes_free(&aes);
     return ret;
 }
 
@@ -513,6 +514,7 @@ static int aes_cbc_test()
         goto exit;
     }
 exit:
+    mbedtls_aes_free(&aes);
     return ret;
 }
 
@@ -570,6 +572,7 @@ static int aes_ctr_test()
         goto exit;
     }
 exit:
+    mbedtls_aes_free(&aes);
     return ret;
 }
 
@@ -631,6 +634,7 @@ static int aes_cfb128_test()
         goto exit;
     }
 exit:
+    mbedtls_aes_free(&aes);
     return ret;
 }
 
@@ -681,6 +685,7 @@ static int aes_cfb8_test()
         goto exit;
     }
 exit:
+    mbedtls_aes_free(&aes);
     return ret;
 }
 
@@ -742,6 +747,7 @@ static int aes_ofb_test()
         goto exit;
     }
 exit:
+    mbedtls_aes_free(&aes);
     return ret;
 }
 
