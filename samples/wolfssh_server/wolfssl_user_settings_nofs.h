@@ -40,6 +40,12 @@ extern "C" {
 #undef  HAVE_AESGCM
 #define HAVE_AESGCM
 
+#undef HAVE_AES_ECB
+#define HAVE_AES_ECB
+
+#undef WOLFSSL_AES_COUNTER
+#define WOLFSSL_AES_COUNTER
+
 #undef  WOLFSSL_SHA512
 #define WOLFSSL_SHA512
 
