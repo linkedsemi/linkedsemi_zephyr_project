@@ -3,7 +3,6 @@
 #include <zephyr/posix/sys/ioctl.h>
 #include "ioctl.h"
 #include "gpio_fs.h"
-#include <stdio.h>
 #include <string.h>
 
 static int gpio_chip_info(void)
