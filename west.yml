@@ -31,3 +31,8 @@ manifest:
     - name: wolfssh
       remote: linkedsemi
       path: modules/lib/wolfssh
+    - name: zephyr-devfs
+      revision: main
+      remote: linkedsemi
+      path: modules/zephyr-devfs
+
