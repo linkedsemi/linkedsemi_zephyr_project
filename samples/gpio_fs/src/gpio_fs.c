@@ -54,11 +54,11 @@ struct gpio_event
 {
     struct gpio_chip *chip;
     struct gpioevent_request req;
-    char name[8];
     struct gpio_callback gpio_cb;
     struct k_poll_signal signal;
     struct ring_buf rb;
     struct gpioevent_data rb_buf[GPIO_LINE_EVENT_DATA_MAX];
+    char name[8];
 };
 
 #define INIT_GPIO_LINE_NAMES_ARRAY(inst)                                       \
@@ -73,6 +73,7 @@ DT_INST_FOREACH_STATUS_OKAY(INIT_GPIO_LINE_NAMES_ARRAY)
         .label = DT_INST_PROP(inst, label),                                     \
         .line_names = gpio_line_names_##inst,                                   \
         .pin_count = DT_INST_PROP(inst, ngpios),                                \
+        .pin_mask = 0,                                                          \
         .ref_cnt = ATOMIC_INIT(0)                                               \
     },
 
@@ -200,32 +201,29 @@ static gpio_flags_t req_flag_2_gpio_flag(uint32_t flags)
 
 static int gpio_line_open(struct fs_file_t* zfp, const char* file_name, fs_mode_t mode)
 {
-    int res = -EINVAL;
     struct gpio_line *line_handle = gpio_line_handle_find(file_name);
+    if (line_handle == NULL || line_handle->chip == NULL)
+        return -EINVAL;
 
-    if (line_handle && line_handle->chip)
+    struct gpio_chip *chip = line_handle->chip;
+    uint32_t lflags = line_handle->req.flags;
+    gpio_flags_t flags = req_flag_2_gpio_flag(lflags);
+    uint32_t *lineoffsets = line_handle->req.lineoffsets;
+    uint8_t *default_values = line_handle->req.default_values;
+
+    gpio_lock();
+    for (int i = 0; i < line_handle->req.lines; i++)
     {
-        struct gpio_chip *chip = line_handle->chip;
-        uint32_t lflags = line_handle->req.flags;
-        gpio_flags_t flags = req_flag_2_gpio_flag(lflags);
-        uint32_t *lineoffsets = line_handle->req.lineoffsets;
-        uint8_t *default_values = line_handle->req.default_values;
-
-        gpio_lock();
-        for (int i = 0; i < line_handle->req.lines; i++)
-        {
-            chip->pin_mask |= BIT(lineoffsets[i]);
-            gpio_pin_configure(chip->dev, lineoffsets[i], flags);
-            if (flags & GPIO_OUTPUT)
-                gpio_pin_set(chip->dev, lineoffsets[i], default_values[i]);
-        }
-
-        gpio_unlock();
-        zfp->filep = line_handle;
-        res = 0;
+        chip->pin_mask |= BIT(lineoffsets[i]);
+        gpio_pin_configure(chip->dev, lineoffsets[i], flags);
+        if (flags & GPIO_OUTPUT)
+            gpio_pin_set(chip->dev, lineoffsets[i], default_values[i]);
     }
 
-    return res;
+    gpio_unlock();
+    zfp->filep = line_handle;
+
+    return 0;
 }
 
 static int gpio_line_close(struct fs_file_t* zfp)
@@ -233,7 +231,7 @@ static int gpio_line_close(struct fs_file_t* zfp)
     struct gpio_line *line_handle = zfp->filep;
     uint32_t *lineoffsets = line_handle->req.lineoffsets;
     char path[32];
-    snprintf(path, 31, "/dev/%s", line_handle->name);
+    snprintf(path, sizeof(path) - 1, "/dev/%s", line_handle->name);
 
     gpio_lock();
     /* disable pin and clear pin mask */
@@ -320,14 +318,6 @@ static const struct fs_file_system_t gpio_line = {
 
 static int gpio_line_handle_create(struct gpiohandle_request *req, struct gpio_chip *chip)
 {
-    int res = 0;
-
-    if (!device_is_ready(chip->dev))
-    {
-        LOG_ERR("GPIO_GET_LINEEVENT_IOCTL: GPIO device not ready!\n");
-        return -ENODEV;
-    }
-
     if (req->lines == 0 || req->lines > chip->pin_count)
     {
         LOG_ERR("GPIO_GET_LINEHANDLE_IOCTL invalid lines=[%u] (must 1~%d)\n", req->lines, chip->pin_count);
@@ -383,33 +373,37 @@ static int gpio_line_handle_create(struct gpiohandle_request *req, struct gpio_c
         return -EINVAL;
 
     gpio_lock();
-    struct gpio_line *line_handle = gpio_line_handle_alloc();
-    if (line_handle)
-    {
-        char path[32];
-        snprintf(path, 31, "/dev/%s", line_handle->name);
-        if (!devfs_register_anon(path, &gpio_line))
-        {
-            line_handle->chip = chip;
-            line_handle->req = *req;
 
-            req->fd = open(path, O_RDWR);
-            if (req->fd < 0)
-            {
-                gpio_unlock();
-                devfs_unregister_anon(path);
-                gpio_line_handle_free(line_handle);
-                return -ENOMEM;
-            }
-            line_handle->req.fd = req->fd;
-        }
-        else
-        {
-            gpio_unlock();
-            gpio_line_handle_free(line_handle);
-            return -ENOMEM;
-        }
+    struct gpio_line *line_handle = gpio_line_handle_alloc();
+    if (line_handle == NULL)
+    {
+        gpio_unlock();
+        return -ENOMEM;
     }
+
+    int res = 0;
+    char path[32];
+
+    snprintf(path, sizeof(path) - 1, "/dev/%s", line_handle->name);
+    if ((res = !devfs_register_anon(path, &gpio_line)))
+    {
+        line_handle->chip = chip;
+        line_handle->req = *req;
+
+        req->fd = open(path, O_RDWR);
+        if (req->fd < 0)
+        {
+            devfs_unregister_anon(path);
+            gpio_line_handle_free(line_handle);
+            res = -errno;
+        }
+        line_handle->req.fd = req->fd;
+    }
+    else
+    {
+        gpio_line_handle_free(line_handle);
+    }
+
     gpio_unlock();
 
     return res;
@@ -424,21 +418,15 @@ static void gpio_irq(const struct device *dev, struct gpio_callback *cb, uint32_
 
     if (pins & BIT(pin))
     {
-        uint64_t uptime_ms = k_uptime_get();
-        uint64_t uptime_ns = uptime_ms * NSEC_PER_MSEC;
-        event_data.timestamp = uptime_ns;
+        event_data.timestamp = k_uptime_get() * NSEC_PER_MSEC;
 
         if ((eflags & GPIOEVENT_REQUEST_RISING_EDGE) && (eflags & GPIOEVENT_REQUEST_FALLING_EDGE))
         {
             bool pin_val = gpio_pin_get(event->chip->dev, pin);
             if (pin_val)
-            {
                 event_data.id = GPIOEVENT_EVENT_RISING_EDGE;
-            }
             else
-            {
                 event_data.id = GPIOEVENT_EVENT_FALLING_EDGE;
-            }
         }
         else if (eflags & GPIOEVENT_REQUEST_RISING_EDGE)
         {
@@ -459,48 +447,48 @@ static void gpio_irq(const struct device *dev, struct gpio_callback *cb, uint32_
 
 static int gpio_event_open(struct fs_file_t* zfp, const char* file_name, fs_mode_t mode)
 {
-    int ret = 0;
     struct gpio_event *event = gpio_line_event_find(file_name);
+    if (event == NULL || event->chip == NULL)
+        return -EINVAL;
 
-    if (event && event->chip)
+    int ret = 0;
+    uint32_t pin = event->req.lineoffset;
+    uint32_t eflags = event->req.eventflags;
+    gpio_flags_t int_flag = 0;
+
+    if (eflags == GPIOEVENT_REQUEST_BOTH_EDGES)
+        int_flag = GPIO_INT_EDGE_BOTH;
+    else if (eflags & GPIOEVENT_REQUEST_RISING_EDGE)
+        int_flag = GPIO_INT_EDGE_RISING;
+    else if (eflags & GPIOEVENT_REQUEST_FALLING_EDGE)
+        int_flag = GPIO_INT_EDGE_FALLING;
+
+    ring_buf_init(&event->rb, sizeof(event->rb_buf), (uint8_t *)&event->rb_buf);
+    k_poll_signal_init(&event->signal);
+    gpio_init_callback(&event->gpio_cb, gpio_irq, BIT(pin));
+    gpio_lock();
+
+    ret = gpio_pin_configure(event->chip->dev, pin, GPIO_INPUT);
+    if (ret != 0)
     {
-        uint32_t pin = event->req.lineoffset;
-        uint32_t eflags = event->req.eventflags;
-        gpio_flags_t int_flag = 0;
-
-        if (eflags == GPIOEVENT_REQUEST_BOTH_EDGES)
-            int_flag = GPIO_INT_EDGE_BOTH;
-        else if (eflags & GPIOEVENT_REQUEST_RISING_EDGE)
-            int_flag = GPIO_INT_EDGE_RISING;
-        else if (eflags & GPIOEVENT_REQUEST_FALLING_EDGE)
-            int_flag = GPIO_INT_EDGE_FALLING;
-
-        ring_buf_init(&event->rb, sizeof(event->rb_buf), (uint8_t *)&event->rb_buf);
-        k_poll_signal_init(&event->signal);
-
-        gpio_lock();
-        ret = gpio_pin_configure(event->chip->dev, pin, GPIO_INPUT);
-        if (ret != 0)
-        {
-            gpio_unlock();
-            LOG_ERR("Error %d: failed to configure pin %d\n", ret, pin);
-            return ret;
-        }
-
-        ret = gpio_pin_interrupt_configure(event->chip->dev, pin, int_flag);
-        if (ret != 0)
-        {
-            gpio_unlock();
-            LOG_ERR("Error %d: failed to configure interrupt pin %d\n", ret, pin);
-            return ret;
-        }
-
-        gpio_init_callback(&event->gpio_cb, gpio_irq, BIT(pin));
-        gpio_add_callback(event->chip->dev, &event->gpio_cb);
-        event->chip->pin_mask |= BIT(pin);
-        zfp->filep = event;
         gpio_unlock();
+        LOG_ERR("Error %d: failed to configure pin %d\n", ret, pin);
+        return ret;
     }
+
+    ret = gpio_pin_interrupt_configure(event->chip->dev, pin, int_flag);
+    if (ret != 0)
+    {
+        gpio_unlock();
+        LOG_ERR("Error %d: failed to configure interrupt pin %d\n", ret, pin);
+        return ret;
+    }
+
+    gpio_add_callback(event->chip->dev, &event->gpio_cb);
+    event->chip->pin_mask |= BIT(pin);
+
+    gpio_unlock();
+    zfp->filep = event;
 
     return 0;
 }
@@ -508,15 +496,12 @@ static int gpio_event_open(struct fs_file_t* zfp, const char* file_name, fs_mode
 static int gpio_event_close(struct fs_file_t* zfp)
 {
     char path[32];
-    int ret = 0;
     struct gpio_event *event = zfp->filep;
-
-    snprintf(path, 31, "/dev/%s", event->name);
 
     gpio_lock();
     event->chip->pin_mask &= ~BIT(event->req.lineoffset);
     /* irq disable */
-    ret = gpio_pin_interrupt_configure(event->chip->dev, event->req.lineoffset, GPIO_INT_DISABLE);
+    gpio_pin_interrupt_configure(event->chip->dev, event->req.lineoffset, GPIO_INT_DISABLE);
     gpio_remove_callback(event->chip->dev, &event->gpio_cb);
     gpio_unlock();
 
@@ -526,6 +511,7 @@ static int gpio_event_close(struct fs_file_t* zfp)
     /* free event object */
     gpio_line_event_free(event);
     /* unregister path */
+    snprintf(path, sizeof(path) - 1, "/dev/%s", event->name);
     devfs_unregister_anon(path);
 
     return 0;
@@ -608,9 +594,6 @@ static const struct fs_file_system_t gpio_event_ops = {
 
 static int gpio_line_event_create(struct gpioevent_request *req, struct gpio_chip *chip)
 {
-    int res = 0;
-    char path[32];
-
     uint32_t lflags = req->handleflags;
     uint32_t eflags = req->eventflags;
     uint32_t pin = req->lineoffset;
@@ -649,30 +632,36 @@ static int gpio_line_event_create(struct gpioevent_request *req, struct gpio_chi
 
     gpio_lock();
     struct gpio_event *line_event = gpio_line_event_alloc();
-    if (line_event)
+
+    if (line_event == NULL)
     {
-        snprintf(path, 31, "/dev/%s", line_event->name);
-
-        if (!devfs_register_anon(path, &gpio_event_ops))
-        {
-            line_event->chip = chip;
-            line_event->req = *req;
-
-            req->fd = open(path, O_RDWR);
-            if (req->fd < 0)
-            {
-                devfs_unregister_anon(path);
-                gpio_line_event_free(line_event);
-                res = -ENOMEM;
-            }
-            line_event->req.fd = req->fd;
-        }
-        else
-        {
-            gpio_line_event_free(line_event);
-            res = -ENOMEM;
-        }
+        gpio_unlock();
+        return -ENOMEM;
     }
+
+    int res = 0;
+    char path[32];
+
+    snprintf(path, sizeof(path) - 1, "/dev/%s", line_event->name);
+    if ((res = !devfs_register_anon(path, &gpio_event_ops)))
+    {
+        line_event->chip = chip;
+        line_event->req = *req;
+
+        req->fd = open(path, O_RDWR);
+        if (req->fd < 0)
+        {
+            devfs_unregister_anon(path);
+            gpio_line_event_free(line_event);
+            res = -errno;
+        }
+        line_event->req.fd = req->fd;
+    }
+    else
+    {
+        gpio_line_event_free(line_event);
+    }
+
     gpio_unlock();
 
     return res;
@@ -682,14 +671,19 @@ static int gpio_chip_open(struct fs_file_t* zfp, const char* file_name, fs_mode_
 {
     struct gpio_chip *chip = gpio_chip_find(file_name);
 
-    if (chip)
+    if (chip == NULL)
+        return -EINVAL;
+
+    if (!device_is_ready(chip->dev))
     {
-        atomic_inc(&chip->ref_cnt);
-        zfp->filep = chip;
-        return 0;
+        LOG_ERR("GPIO device not ready!\n");
+        return -ENODEV;
     }
 
-    return -EINVAL;
+    zfp->filep = chip;
+    atomic_inc(&chip->ref_cnt);
+
+    return 0;
 }
 
 static int gpio_chip_close(struct fs_file_t* zfp)
@@ -764,11 +758,11 @@ static const struct fs_file_system_t gpio_chip = {
 
 static int gpio_fs_init(void)
 {
-    char name[64];
+    char name[32];
 
     for (int i = 0; i < ARRAY_SIZE(gpio_devices); i++)
     {
-        snprintf(name, 64, "/dev/%s", gpio_devices[i].label);
+        snprintf(name, sizeof(name) - 1, "/dev/%s", gpio_devices[i].label);
         devfs_register(name, &gpio_chip);
     }
     gpio_line_handle_init();
