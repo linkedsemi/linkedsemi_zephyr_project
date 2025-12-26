@@ -35,7 +35,7 @@ static void update_alarm_callback(const struct device *dev, void *user_data)
 void main(void)
 {
     struct rtc_time now;
-    const struct device *rtc_dev = DEVICE_DT_GET(DT_NODELABEL(rtc0));
+    const struct device *rtc_dev = DEVICE_DT_GET(DT_NODELABEL(rtc));
 
     //get rtc_driver_api
     const struct rtc_driver_api *api = (const struct rtc_driver_api *)rtc_dev->api;
