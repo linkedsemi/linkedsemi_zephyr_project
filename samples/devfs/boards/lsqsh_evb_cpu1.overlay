@@ -157,3 +157,12 @@
     /*B0-B7*/	"","","","","","","","";
 };
 
+&uart4 {
+    label = "ttyS0";
+    status = "okay";
+};
+
+&uart1 {
+    label = "ttyS1";
+    status = "okay";
+};
