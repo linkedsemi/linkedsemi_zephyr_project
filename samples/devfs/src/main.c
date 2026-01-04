@@ -8,7 +8,7 @@
 
 int main(void)
 {
-    printk("devfs!!\n");
+    printk("devfs and sysfs!!\n");
     return 0;
 }
  
