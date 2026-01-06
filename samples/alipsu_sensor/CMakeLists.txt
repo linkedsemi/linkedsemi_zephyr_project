@@ -4,9 +4,9 @@ cmake_minimum_required(VERSION 3.22)
 set(DTC_OVERLAY_FILE boards/alipsu.overlay)
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(alipsu_app)
+project(alipsu_sensor_app)
 
-# 添加PMBus/Alipsu库目录到包含路径
+# 添加PMBus库目录到包含路径
 include_directories($ENV{ZEPHYR_BASE}/drivers/sensor/ls_pmbus)
 include_directories($ENV{ZEPHYR_BASE}/drivers/sensor/alipsu)
 
@@ -16,7 +16,6 @@ target_sources(app PRIVATE ${app_sources})
 
 # 确保设备树生成正确
 zephyr_library_include_directories(${ZEPHYR_BASE}/include)
-zephyr_library_include_directories(${ZEPHYR_BASE}/drivers/sensor/alipsu)
 
 # 添加依赖关系，确保PMBus库在alipsu之前编译
 add_dependencies(app zephyr_interface)

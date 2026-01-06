@@ -1,0 +1,39 @@
+/*
+ * Copyright (c) 2018 Jan Van Winkel <jan.van_winkel@dxplore.eu>
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&i2c7 {
+    status = "okay";
+    //clock-frequency = <100000>;
+    bus-frequency = <100000>;
+};
+
+&smbus7 {
+    status = "okay";
+    
+    alipsu1: alipsu@40 {
+        compatible = "ali,psu";
+        reg = <0x40>;
+        status = "okay";
+        smbus-max-frequency = <100000>;
+    };
+};
+
+&i2c5 {
+    status = "okay";
+    //clock-frequency = <100000>;
+    bus-frequency = <100000>;
+};
+
+&smbus5 {
+    status = "okay";
+    
+    alipsu2: alipsu@48 {
+        compatible = "ali,psu";
+        reg = <0x48>;
+        status = "okay";
+        smbus-max-frequency = <100000>;
+    };
+};
