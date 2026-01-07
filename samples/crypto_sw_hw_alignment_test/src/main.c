@@ -10,9 +10,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <wolfssl/wolfcrypt/sha256.h>
+#include <wolfssl/wolfcrypt/sha512.h>
 #include <wolfssl/wolfcrypt/sm3.h>
+#include <wolfssl/wolfcrypt/types.h>
 #include "mbedtls/sha256.h"
+#include "mbedtls/sha512.h"
 
+static int devId = INVALID_DEVID;
 typedef struct testVector {
     const char*  input;
     const char*  output;
@@ -30,6 +34,10 @@ uint8_t sw_hash224_result[WC_SHA224_DIGEST_SIZE];
 uint8_t hw_hash224_result[WC_SHA224_DIGEST_SIZE];
 uint8_t sw_sm3_result[WC_SM3_DIGEST_SIZE];
 uint8_t hw_sm3_result[WC_SM3_DIGEST_SIZE];
+uint8_t sw_hash384_result[WC_SHA384_DIGEST_SIZE];
+uint8_t hw_hash384_result[WC_SHA384_DIGEST_SIZE];
+uint8_t sw_hash512_result[WC_SHA512_DIGEST_SIZE];
+uint8_t hw_hash512_result[WC_SHA512_DIGEST_SIZE];
 
 inline static void print_hex(const uint8_t *ptr, uint32_t len)
 {
@@ -135,7 +143,7 @@ int sha256_test(void)
         // print_hex(sha_plaintext_buf, test_plaintext_len);
         // printk("\n");
 
-        wc_InitSha256_ex(&sw_sha, NULL, NULL);
+        wc_InitSha256_ex(&sw_sha, NULL, devId);
 
         sw_sha256_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
 
@@ -255,7 +263,7 @@ int sha224_test(void)
             memset(sha_plaintext_buf, 2, test_plaintext_len);
         }
 
-        wc_InitSha224_ex(&sw_sha, NULL, NULL);
+        wc_InitSha224_ex(&sw_sha, NULL, devId);
 
         sw_sha224_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
 
@@ -374,7 +382,7 @@ int sm3_test(void)
             memset(sha_plaintext_buf, 2, test_plaintext_len);
         }
 
-        wc_InitSm3(&sw_sha, NULL, NULL);
+        wc_InitSm3(&sw_sha, NULL, devId);
 
         sw_sm3_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
 
@@ -392,6 +400,246 @@ int sm3_test(void)
 
         printk("out compare result: ");
         if (memcmp(sw_sm3_result, hw_sm3_result, WC_SM3_DIGEST_SIZE) == 0) {
+            printk("compare pass\n");
+        } else {
+            printk("compare fail\n");
+            __ASSERT_NO_MSG(0);
+        }
+    }
+    return 0;
+}
+
+int sw_sha384_test(wc_Sha384* sha384, const byte* plaintext, word32 plaintext_len)
+{
+    int ret = 0;
+    const byte* in_buf = NULL;
+    word32 in_len;
+    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
+    
+    for(int i = 0; i <= trans_count; i++) {
+        if(trans_count == 0)
+        {
+            in_buf = plaintext;
+            in_len = plaintext_len;
+        }
+        else if((i == trans_count) && (trans_count > 0)){
+            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
+            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
+        }
+        else{
+            in_buf = plaintext + TEST_STEP_SIZE * i;
+            in_len = TEST_STEP_SIZE;
+        }
+
+        if((ret = wc_Sha384Update(sha384, in_buf, in_len)) != 0){
+            __ASSERT_NO_MSG(0);
+        }
+    }
+
+    if((ret = wc_Sha384Final(sha384, sw_hash384_result)) !=0){
+        __ASSERT_NO_MSG(0);
+    }
+
+    wc_Sha384Free(sha384);
+
+    return ret;
+}
+
+int hw_sha384_test(mbedtls_sha512_context *sha, const unsigned char *plaintext, size_t plaintext_len)
+{
+    int ret = 0;
+    bool is384 = true;
+    const unsigned char * in_buf = NULL;
+    size_t in_len;
+    volatile uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
+
+    if ((ret = mbedtls_sha512_starts(sha, is384)) != 0) {
+        __ASSERT_NO_MSG(0);
+    }
+
+    for(int i = 0; i <= trans_count; i++) {
+        if(trans_count == 0)
+        {
+            in_buf = plaintext;
+            in_len = plaintext_len;
+        }
+        else if((i == trans_count) && (trans_count > 0)){
+            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
+            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
+        }
+        else{
+            in_buf = plaintext + TEST_STEP_SIZE * i;
+            in_len = TEST_STEP_SIZE;
+        }
+
+        if ((ret = mbedtls_sha512_update(sha, in_buf, in_len)) != 0) {
+        __ASSERT_NO_MSG(0);
+        }
+    }
+
+    if ((ret = mbedtls_sha512_finish(sha, hw_hash384_result)) != 0) {
+        __ASSERT_NO_MSG(0);
+    }
+
+    mbedtls_sha512_free(sha);
+
+    return 0;
+}
+
+int sha384_test(void)
+{
+    wc_Sha384 sw_sha;
+    mbedtls_sha512_context hw_sha;
+
+    for(uint32_t test_plaintext_len = 0; test_plaintext_len <= TEST_TOTAL_SIZE; test_plaintext_len++)
+    {
+        printk("test_plaintext_len: %d\n", test_plaintext_len);
+        memset(sw_hash384_result, 0, WC_SHA384_DIGEST_SIZE);
+        memset(hw_hash384_result, 0, WC_SHA384_DIGEST_SIZE);
+
+        if(test_plaintext_len > 0)
+        {
+            memset(sha_plaintext_buf, 2, test_plaintext_len);
+        }
+
+        wc_InitSha384_ex(&sw_sha, NULL, devId);
+
+        sw_sha384_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
+
+        mbedtls_sha512_init(&hw_sha);
+
+        hw_sha384_test(&hw_sha, (char*)sha_plaintext_buf, (size_t)test_plaintext_len);
+
+        printk("sw out result: ");
+        print_hex(sw_hash384_result, WC_SHA384_DIGEST_SIZE);
+        printk("\n");
+
+        printk("hw out result: ");
+        print_hex(hw_hash384_result, WC_SHA384_DIGEST_SIZE);
+        printk("\n");
+
+        printk("out compare result: ");
+        if (memcmp(sw_hash384_result, hw_hash384_result, WC_SHA384_DIGEST_SIZE) == 0) {
+            printk("compare pass\n");
+        } else {
+            printk("compare fail\n");
+            __ASSERT_NO_MSG(0);
+        }
+    }
+    return 0;
+}
+
+int sw_sha512_test(wc_Sha512* sha512, const byte* plaintext, word32 plaintext_len)
+{
+    int ret = 0;
+    const byte* in_buf = NULL;
+    word32 in_len;
+    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
+    
+    for(int i = 0; i <= trans_count; i++) {
+        if(trans_count == 0)
+        {
+            in_buf = plaintext;
+            in_len = plaintext_len;
+        }
+        else if((i == trans_count) && (trans_count > 0)){
+            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
+            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
+        }
+        else{
+            in_buf = plaintext + TEST_STEP_SIZE * i;
+            in_len = TEST_STEP_SIZE;
+        }
+
+        if((ret = wc_Sha512Update(sha512, in_buf, in_len)) != 0){
+            __ASSERT_NO_MSG(0);
+        }
+    }
+
+    if((ret = wc_Sha512Final(sha512, sw_hash512_result)) !=0){
+        __ASSERT_NO_MSG(0);
+    }
+
+    wc_Sha512Free(sha512);
+
+    return ret;
+}
+
+int hw_sha512_test(mbedtls_sha512_context *sha, const unsigned char *plaintext, size_t plaintext_len)
+{
+    int ret = 0;
+    bool is384 = false;
+    const unsigned char * in_buf = NULL;
+    size_t in_len;
+    volatile uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
+
+    if ((ret = mbedtls_sha512_starts(sha, is384)) != 0) {
+        __ASSERT_NO_MSG(0);
+    }
+
+    for(int i = 0; i <= trans_count; i++) {
+        if(trans_count == 0)
+        {
+            in_buf = plaintext;
+            in_len = plaintext_len;
+        }
+        else if((i == trans_count) && (trans_count > 0)){
+            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
+            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
+        }
+        else{
+            in_buf = plaintext + TEST_STEP_SIZE * i;
+            in_len = TEST_STEP_SIZE;
+        }
+
+        if ((ret = mbedtls_sha512_update(sha, in_buf, in_len)) != 0) {
+        __ASSERT_NO_MSG(0);
+        }
+    }
+
+    if ((ret = mbedtls_sha512_finish(sha, hw_hash512_result)) != 0) {
+        __ASSERT_NO_MSG(0);
+    }
+
+    mbedtls_sha512_free(sha);
+
+    return 0;
+}
+
+int sha512_test(void)
+{
+    wc_Sha512 sw_sha;
+    mbedtls_sha512_context hw_sha;
+
+    for(uint32_t test_plaintext_len = 0; test_plaintext_len <= TEST_TOTAL_SIZE; test_plaintext_len++)
+    {
+        printk("test_plaintext_len: %d\n", test_plaintext_len);
+        memset(sw_hash512_result, 0, WC_SHA512_DIGEST_SIZE);
+        memset(hw_hash512_result, 0, WC_SHA512_DIGEST_SIZE);
+
+        if(test_plaintext_len > 0)
+        {
+            memset(sha_plaintext_buf, 2, test_plaintext_len);
+        }
+
+        wc_InitSha512_ex(&sw_sha, NULL, devId);
+
+        sw_sha512_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
+
+        mbedtls_sha512_init(&hw_sha);
+
+        hw_sha512_test(&hw_sha, (char*)sha_plaintext_buf, (size_t)test_plaintext_len);
+
+        printk("sw out result: ");
+        print_hex(sw_hash512_result, WC_SHA512_DIGEST_SIZE);
+        printk("\n");
+
+        printk("hw out result: ");
+        print_hex(hw_hash512_result, WC_SHA512_DIGEST_SIZE);
+        printk("\n");
+
+        printk("out compare result: ");
+        if (memcmp(sw_hash512_result, hw_hash512_result, WC_SHA512_DIGEST_SIZE) == 0) {
             printk("compare pass\n");
         } else {
             printk("compare fail\n");
@@ -419,6 +667,16 @@ int main(void)
         printk("SM3  test failed!\n");
     else
         printk("SM3  test passed!\n");
+
+    if ( (ret = sha384_test()) != 0)
+        printk("SHA-384  test failed!\n");
+    else
+        printk("SHA-384  test passed!\n");
+
+    if ( (ret = sha512_test()) != 0)
+        printk("SHA-512  test failed!\n");
+    else
+        printk("SHA-512  test passed!\n");
 
     return 0;
 }

@@ -95,11 +95,11 @@ extern "C" {
 // #undef  HAVE_AESGCM
 // // #define HAVE_AESGCM
 
-// #undef  WOLFSSL_SHA512
-// #define WOLFSSL_SHA512
+#undef  WOLFSSL_SHA512
+#define WOLFSSL_SHA512
 
-// #undef  WOLFSSL_SHA384
-// #define WOLFSSL_SHA384
+#undef  WOLFSSL_SHA384
+#define WOLFSSL_SHA384
 
 // #undef  NO_DSA
 // #define NO_DSA
