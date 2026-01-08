@@ -3,7 +3,8 @@ manifest:
   remotes:
     - name: linkedsemi
       url-base: https://github.com/linkedsemi
-
+    - name: ls_sw
+      url-base: http://10.10.20.8:8000/sw
   projects:
     - name: zephyr
       remote: linkedsemi
@@ -35,4 +36,11 @@ manifest:
       revision: main
       remote: linkedsemi
       path: modules/zephyr-devfs
-
+    - name: safeclib
+      revision: zephyr
+      remote: ls_sw
+      path: modules/safeclib
+    - name: jtag_asd
+      revision: master
+      remote: ls_sw
+      path: modules/jtag_asd

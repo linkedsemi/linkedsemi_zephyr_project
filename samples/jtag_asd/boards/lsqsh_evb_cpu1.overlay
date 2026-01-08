@@ -1,0 +1,227 @@
+&pinctrl{
+    /omit-if-no-ref/mjtag1_gpio_pn10: mjtag1_gpio_pn10 {
+        pinmux = <PN10>;
+        gpio;
+        output-enable;
+    };
+    /omit-if-no-ref/mjtag3_gpio_pf02: mjtag3_gpio_pf02 {
+        pinmux = <PF02>;
+        gpio;
+        output-enable;
+    };
+};
+
+&jtag1 {
+    pinctrl-0 = <&mjtag1_tck_pn06 &mjtag1_tms_pn07 &mjtag1_tdi_pn09 &mjtag1_tdo_pn08 &mjtag1_trst_pn10>;
+    pinctrl-1 = <&mjtag1_gpio_pn06 &mjtag1_gpio_pn07 &mjtag1_gpio_pn09 &mjtag1_gpio_pn10>;
+    tck-gpios = <&gpion 6 0>;
+    tms-gpios = <&gpion 7 0>;
+    tdi-gpios = <&gpion 9 0>;
+    tdo-gpios = <&gpion 8 0>;
+    trst-gpios = <&gpion 10 0>;
+    pinctrl-names = "default", "priv_start";
+    label = "jtag1";
+    status = "okay";
+};
+
+&jtag3 {
+    pinctrl-0 = <&mjtag3_tck_pf04 &mjtag3_tms_pf08 &mjtag3_tdi_pf06 &mjtag3_tdo_pf10>;
+    pinctrl-1 = <&mjtag3_gpio_pf04 &mjtag3_gpio_pf08 &mjtag3_gpio_pf06>;
+    tck-gpios = <&gpiof 4 0>;
+    tms-gpios = <&gpiof 8 0>;
+    tdi-gpios = <&gpiof 6 0>;
+    tdo-gpios = <&gpiof 10 0>;
+    trst-gpios = <&gpiof 2 0>;
+    pinctrl-names = "default", "priv_start";
+    label = "jtag3";
+    status = "okay";
+};
+
+&gpioa {
+    label = "gpiochip0";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","BMC_READY_OUT_N","","","","";
+};
+
+&gpiob {
+    label = "gpiochip1";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","kaka","","","","";
+};
+
+&gpioc {
+    label = "gpiochip2";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","","","","","";
+};
+
+&gpiod {
+    label = "gpiochip3";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","","","","","";
+};
+
+&gpioe {
+    label = "gpiochip4";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","","","","","";
+};
+
+&gpiof {
+    label = "gpiochip5";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","","","","","";
+};
+
+&gpiog {
+    label = "gpiochip6";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","","","","","";
+};
+
+&gpioh {
+    label = "gpiochip7";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","","","","","";
+};
+
+&gpioi {
+    label = "gpiochip8";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","","","","","";
+};
+
+&gpioj {
+    label = "gpiochip9";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","","","","","";
+};
+
+&gpiok {
+    label = "gpiochip10";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","","","","","";
+};
+
+&gpiom {
+    label = "gpiochip11";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","","","","","";
+};
+
+&gpion {
+    label = "gpiochip12";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","","","","","";
+};
+
+&gpioq {
+    label = "gpiochip13";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","","","","","";
+};
+
+&gpiot {
+    label = "gpiochip14";
+    ngpios = <16>;
+    status = "okay";
+    gpio-line-names =
+    /*A0-A7*/	"","","","","","","","",
+    /*B0-B7*/	"","","","","","","","";
+};
+
+&uart4 {
+    label = "ttyS0";
+    status = "okay";
+};
+
+&uart1 {
+    label = "ttyS1";
+    status = "okay";
+};
+
+&adc1 {
+    #address-cells = <1>;
+    #size-cells = <0>;
+    pinctrl-0 = <&adc1_ain8_pc11 &adc1_ain9_pc12 &adc1_ain10_pc13>;
+    pinctrl-names = "default";
+    conversion_mode = <regular_mode>;
+    data_align = <ADC_DATAALIGN_RIGHT>;
+    continuous_conv_mode = <continuous>;
+    nbr_of_conversion = <3>;
+    discontinuous_conv_mode = <discontinuous>;
+    nbr_of_disc_conversion = <0>;
+    trig_type = <ADC_SOFTWARE_TRIGT>;
+    adc_drive_type = <BINBUF_DIRECT_DRIVE_ADC>;
+    adc_clk_div = <256>;
+    clk_cfg = <ADC_CH_CLOCK_DIV8>;
+    injected_offset = <0>;
+    fif_ctrl1 = <0xFFFF>;
+    #hwmon-in-cells = <1>;
+    status = "okay";
+};
+
+&i2c5 {
+    status = "okay";
+    label = "i2c-5";
+    #hwmon-in-cells = <1>;
+};
+
+/ {
+    hwmon0 {
+        compatible = "linkedsemi,hwmon";
+        class = < 0x2 >;
+        label = "hwmon0"; // sysfs dir name
+        hwmon-ins = < &adc1 0x8 >, < &adc1 0x9 >, < &adc1 0xa >;
+        status = "okay";
+    };
+
+    hwmon1 { 
+        compatible = "linkedsemi,hwmon";
+        class = <5>;
+        label = "hwmon1";
+        hwmon-ins = <&i2c5 0x60>;
+    };
+};
