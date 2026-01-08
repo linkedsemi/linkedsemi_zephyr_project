@@ -24,9 +24,21 @@ LOG_MODULE_REGISTER(alipsu_sensor_app, LOG_LEVEL_INF);
 void main(void) {
   const struct device *dev1 = DEVICE_DT_GET(ALIPSU_DEV_NODE1);
   const struct device *dev2 = DEVICE_DT_GET(ALIPSU_DEV_NODE2);
-  struct sensor_value voltage, current, temp, power, fan;
+  struct sensor_value voltage, current, temp, power, fan, health;
   uint8_t retry = 0;
   int ret;
+  enum status_type {
+    STATUS_WORD = 0,
+    STATUS_CML = 1,
+    STATUS_FANS12 = 2,
+    STATUS_INPUT = 3,
+    STATUS_IOUT = 4,
+    STATUS_MFR_SPEC = 5,
+    STATUS_OTHER = 6,
+    STATUS_TEMP = 7,
+    STATUS_VOUT = 8,
+  };
+  enum status_type type;
 
   if (NULL == dev1) {
     LOG_ERR("Failed to get ALIPSU1 device binding");
@@ -137,6 +149,19 @@ void main(void) {
     }
     LOG_INF("Fan2 RPM mHz: %d", fan.val1);
 
+    LOG_INF("0: status_word, 1: status_cml, 2: status_fans12, 3: status_input, 4: status_iout, \
+             5: status_mfr_spec, 6: status_other, 7: status_temp, 8: status_vout */");
+    for (type = STATUS_WORD; type < STATUS_VOUT; type++) {
+      /* 0: status_word, 1: status_cml, 2: status_fans12, 3: status_input, 4: status_iout, 
+      5: status_mfr_spec, 6: status_other, 7: status_temp, 8: status_vout */
+      health.val2 = type; 
+      ret = sensor_channel_get(dev1, SENSOR_CHAN_GAUGE_STATE_OF_HEALTH, &health);
+      if (ret < 0) {
+        LOG_ERR("Failed to get status [%d]: %d", type, ret);
+      }
+      LOG_INF("Status [%d]: %d", type, health.val1);
+    }
+
     k_sleep(K_SECONDS(1));
     retry++;
   }
@@ -228,6 +253,19 @@ void main(void) {
       LOG_ERR("Failed to get fan2: %d", ret);
     }
     LOG_INF("Fan2 RPM mHz: %d", fan.val1);
+
+    LOG_INF("0: status_word, 1: status_cml, 2: status_fans12, 3: status_input, 4: status_iout, \
+             5: status_mfr_spec, 6: status_other, 7: status_temp, 8: status_vout */");
+    for (type = STATUS_WORD; type < STATUS_VOUT; type++) {
+      /* 0: status_word, 1: status_cml, 2: status_fans12, 3: status_input, 4: status_iout, 
+      5: status_mfr_spec, 6: status_other, 7: status_temp, 8: status_vout */
+      health.val2 = type; 
+      ret = sensor_channel_get(dev2, SENSOR_CHAN_GAUGE_STATE_OF_HEALTH, &health);
+      if (ret < 0) {
+        LOG_ERR("Failed to get status [%d]: %d", type, ret);
+      }
+      LOG_INF("Status [%d]: %d", type, health.val1);
+    }
 
     k_sleep(K_SECONDS(1));
     retry++;
