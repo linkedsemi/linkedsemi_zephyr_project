@@ -1,0 +1,20 @@
+
+
+&i3c5 {
+    i3c-scl-hz = <12500000>;
+    i2c-scl-hz = <0>;
+    status = "okay";
+    
+    own-dynamic_address = <0x38>;
+    tgt-pid = <0x5 0x55>;
+    dcr = <0x4>;
+    bcr = <0x42>;
+    interrupts = <I3C5_IRQN 7>;
+
+    pinctrl-0 = <
+        &i3c5_scl_pj10
+        &i3c5_sda_pj11
+    >;
+    pinctrl-names = "default";
+
+};
