@@ -123,11 +123,19 @@ void main(void) {
     }
     LOG_INF("Output Current mV: %d", current.val1);
 
+    power.val2 = 0; /* pin */
     ret = sensor_channel_get(dev1, SENSOR_CHAN_POWER, &power);
     if (ret < 0) {
       LOG_ERR("Failed to get input power: %d", ret);
     }
     LOG_INF("Input Power uW: %d", power.val1);
+
+    power.val2 = 1; /* pout */
+    ret = sensor_channel_get(dev1, SENSOR_CHAN_POWER, &power);
+    if (ret < 0) {
+      LOG_ERR("Failed to get output power: %d", ret);
+    }
+    LOG_INF("Output Power uW: %d", power.val1);
 
     ret = sensor_channel_get(dev1, SENSOR_CHAN_GAUGE_TEMP, &temp);
     if (ret < 0) {
@@ -228,11 +236,19 @@ void main(void) {
     }
     LOG_INF("Output Current mV: %d", current.val1);
 
+    power.val2 = 0; /* pin */
     ret = sensor_channel_get(dev2, SENSOR_CHAN_POWER, &power);
     if (ret < 0) {
       LOG_ERR("Failed to get input power: %d", ret);
     }
     LOG_INF("Input Power uW: %d", power.val1);
+
+    power.val2 = 1; /* pout */
+    ret = sensor_channel_get(dev2, SENSOR_CHAN_POWER, &power);
+    if (ret < 0) {
+      LOG_ERR("Failed to get output power: %d", ret);
+    }
+    LOG_INF("Output Power uW: %d", power.val1);
 
     ret = sensor_channel_get(dev2, SENSOR_CHAN_GAUGE_TEMP, &temp);
     if (ret < 0) {
