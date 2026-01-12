@@ -15,11 +15,11 @@
 };
 
 &i3c13_scl_pk08 {
-    drive-strength = <3>;
+    drive-strength = <1>;
     bias-pull-up2;
 };
 &i3c13_sda_pk09 {
-    drive-strength = <3>;
+    drive-strength = <1>;
     bias-pull-up2;
 };
 

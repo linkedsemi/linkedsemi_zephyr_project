@@ -1,4 +1,6 @@
 
+
+
 &i3c5_scl_pj10 {
     drive-strength = <1>;
     bias-pull-up2;
@@ -11,7 +13,7 @@
 
 &i3c5 {
     i3c-scl-hz = <12500000>;
-    i2c-scl-hz = <0>;
+    i2c-scl-hz = <1000000>;
     status = "okay";
     
     own-dynamic_address = <0x38>;
@@ -24,6 +26,20 @@
         &i3c5_scl_pj10
         &i3c5_sda_pj11
     >;
-    pinctrl-names = "default";
+    pinctrl-1 = <
+        &I2C5_scl_PJ10
+        &I2C5_sda_PJ11
+    >;
+    pinctrl-names = "default","pinmux_i2c";
 
+    i3ctarget1: i3ctarget@20813811000 {
+        compatible = "vnd,i3c-device";
+        reg = < 0 0x0208 0x13811000>;
+        assigned-address = <0x32>;
+        status = "okay";
+    };
+};
+
+&i2c5 {
+    status = "okay";
 };
