@@ -70,6 +70,8 @@ extern "C" {
 #define XHCI_OP_PORTSC_SPEED(psc)           ((psc >> 10) & 0xf)
 #define XHCI_OP_PORTSC_LINK_STATE(psc)           ((psc >> 5) & 0xf)
 
+#define	EP_ID_FOR_TRB(p)                ((((p) + 1) & 0x1f) << 16)
+
 /* usbsts */
 #define XHCI_USBSTS_EINT            (1 << 3)
 /* imain */
@@ -333,12 +335,21 @@ struct xhci_ring
     uint32_t cycle_bit;
 };
 
+typedef enum 
+{
+    DISABLE_STATE,
+    RUNING_STATE,
+    HALTED_STATE,
+    STOPPED_STATE,
+    ERROR_STATE
+} xhci_ep_state_t;
+
 struct xhci_hcd;
 
 struct xhci_ep
 {
     struct xhci_ring ep_ring;
-    uint8_t state;
+    xhci_ep_state_t state;
 };
 
 struct usb_setup_packet

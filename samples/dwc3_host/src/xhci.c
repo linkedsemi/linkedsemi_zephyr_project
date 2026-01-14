@@ -323,6 +323,9 @@ int xhci_alloc_device(struct xhci_hcd *xhci)
     /* ep0 transfer ring init */
     xhci_ring_init(&xhci->device[slot].ep[0].ep_ring, ep0_trb, XHCI_RING_TRB_MAX_NUM, CTRL_RING);
 
+    for (int i = 0; i < 31; i++)
+        xhci->device[slot].ep[i].state = DISABLE_STATE;
+
     /* prepare input ctx for address device command */
     xhci->device[slot].slot = slot;
 
@@ -423,6 +426,31 @@ static int xhci_ep_2_index(uint8_t ep, xhci_ep_type_t type)
     return ep;
 }
 
+static int xhci_set_deq_endpoint(struct xhci_hcd *xhci, int slot, int ep_index)
+{
+    struct xhci_ring *ep_ring = &xhci->device[slot].ep[ep_index].ep_ring;
+    struct xhci_trb trb = {
+        .paramater = (size_t)(ep_ring->trb + ep_ring->write_index) | ep_ring->cycle_bit,
+        .status = 0,
+        .control = TRB_TYPE(TRB_SET_DEQ) | SLOT_ID_FOR_TRB(slot) | EP_ID_FOR_TRB(ep_index) | xhci->cmd_ring.cycle_bit
+    };
+    xhci_command_submit(xhci, &trb);
+
+    return GET_COMP_CODE(trb.status) == COMP_SUCCESS ? 0 : -1;
+}
+
+static int xhci_reset_stall_endpoint(struct xhci_hcd *xhci, int slot, int ep_index)
+{
+    struct xhci_trb trb = {
+        .paramater = 0,
+        .status = 0,
+        .control = TRB_TYPE(TRB_RESET_EP) | SLOT_ID_FOR_TRB(slot) | EP_ID_FOR_TRB(ep_index) | xhci->cmd_ring.cycle_bit
+    };
+    xhci_command_submit(xhci, &trb);
+
+    return GET_COMP_CODE(trb.status) == COMP_SUCCESS ? 0 : -1;
+}
+
 int xhci_xfer_control(struct xhci_hcd *xhci, int slot, int ep, struct usb_setup_packet *req, void *data, uint32_t length)
 {
     int xfer_len = -1;
@@ -462,12 +490,10 @@ int xhci_xfer_control(struct xhci_hcd *xhci, int slot, int ep, struct usb_setup_
     trb.field[0] = 0;
     trb.field[1] = 0;
     trb.field[2] = 0;
-    trb.field[3] = TRB_TYPE(TRB_STATUS) | ep_ring->cycle_bit;
+    trb.field[3] = TRB_TYPE(TRB_STATUS) | ep_ring->cycle_bit | TRB_IOC;
 
-    if (data && length && req->bmRequestType & 0x80)
-        trb.field[3] |= TRB_ISP;
-    else
-        trb.field[3] |= TRB_ISP | TRB_DIR_IN;
+    if (!data || !length || !(req->bmRequestType & 0x80))
+        trb.field[3] |= TRB_DIR_IN;
 
     xhci_enqueue_trb(xhci, ep_ring, (struct xhci_trb *)&trb);
     /* ring ep0 doorbell */
@@ -476,12 +502,26 @@ int xhci_xfer_control(struct xhci_hcd *xhci, int slot, int ep, struct usb_setup_
     xhci_event_wait();
     xhci_enqueue_unlock();
 
+    /* 
+        If two event trbs are triggered simultaneously, the trb here will be overwritten. 
+        This ugly implementation can be improved later. 
+    */
     trb = *(struct xhci_generic_trb *)&xhci->evt_trb;
 
     if (GET_COMP_CODE(trb.field[2]) == COMP_SHORT_PACKET)
+    {
         xfer_len = trb.field[2] & 0xffffff;
+    }
     else if (GET_COMP_CODE(trb.field[2]) == COMP_SUCCESS)
+    {
         xfer_len = 0;
+    }
+    else if (GET_COMP_CODE(trb.field[2]) == COMP_STALL_ERROR)
+    {
+        xhci_reset_stall_endpoint(xhci, slot, ep_index);
+        xhci_set_deq_endpoint(xhci, slot, ep_index);
+        XHCI_LOG_DBG("endpoint %x receive stall\n", ep);
+    }
 
     return xfer_len;
 }
@@ -568,7 +608,7 @@ int xhci_xfer_bulk(struct xhci_hcd *xhci, int slot, int ep, void *data, int leng
 
 int xhci_xfer_interrupt(struct xhci_hcd *xhci, int slot, int ep, void *data, int legth)
 {
-    return 0;
+    return xhci_xfer_bulk(xhci, slot, ep, data, legth);
 }
 
 void xhci_slot_ctx_copy(struct xhci_hcd *xhci, int slot)
@@ -585,12 +625,16 @@ void xhci_slot_ctx_copy(struct xhci_hcd *xhci, int slot)
 
 int xhci_cmd_add_endpoint(struct xhci_hcd *xhci, int slot, struct xhci_ep_config *ep_config)
 {
+    int ret = -1;
     struct xhci_trb trb;
     struct xhci_input_control_ctx *control_ctx;
     struct xhci_ep_ctx *ep_ctx;
     struct xhci_slot_ctx *in;
     uint8_t ep_index =  xhci_ep_2_index(ep_config->ep_addr, ep_config->ep_type);
     struct xhci_trb *ep_trb = xhci_mem_alloc(XHCI_ALIGN, XHCI_RING_TRB_MAX_NUM * sizeof (struct xhci_trb));
+
+    if (xhci->device[slot].ep[ep_index].state == RUNING_STATE)
+        return -2;
 
     control_ctx = (struct xhci_input_control_ctx *)xhci->device[slot].input_ctx.ctx;
     control_ctx->add_flags = SLOT_FLAG;
@@ -623,8 +667,14 @@ int xhci_cmd_add_endpoint(struct xhci_hcd *xhci, int slot, struct xhci_ep_config
         the slot must be in the Addressed state to use the Configure Endpoint command.
     */
     xhci_command_submit(xhci, &trb);
-    /* check command exec resule */
-    return GET_COMP_CODE(trb.status) == COMP_SUCCESS ? 0 : -1;
+
+    if (GET_COMP_CODE(trb.status) == COMP_SUCCESS)
+    {
+        xhci->device[slot].ep[ep_index].state = RUNING_STATE;
+        ret = 0;
+    }
+
+    return ret;
 }
 
 int xhci_cmd_drop_endpoint(struct xhci_hcd *xhci, int slot, uint8_t ep)

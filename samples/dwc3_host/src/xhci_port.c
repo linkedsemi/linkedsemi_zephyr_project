@@ -3,6 +3,8 @@
 #include <zephyr/cache.h>
 
 static volatile int event_sync = 0;
+static volatile int event_wait = 0;
+
 
 void xhci_enqueue_lock()
 {
@@ -16,12 +18,16 @@ void xhci_enqueue_unlock()
 
 void xhci_event_complete()
 {
-    event_sync = 1;
+    /* 有人等，才唤醒线程，没人等，不能唤醒，避免下一个线程直接不用等 */
+    if (event_wait)
+        event_sync = 1;
 }
 
 void xhci_event_wait()
 {
+    event_wait = 1;
     while (!event_sync);
+    event_wait = 0;
     event_sync = 0;
 }
 
