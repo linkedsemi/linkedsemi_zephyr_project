@@ -224,4 +224,21 @@
         label = "hwmon1";
         hwmon-ins = <&i2c5 0x60>;
     };
+
+    leds: leds {
+        compatible = "gpio-leds";
+        led0 {
+            gpios = < &gpioh 0x8 0x0 >;
+            label = "LED0";
+        };
+        led1 {
+            gpios = < &gpioh 0x7 0x0 >;
+            label = "LED1";
+        };
+        led2 {
+            gpios = < &gpioh 0x0 0x0 >;
+            label = "LED2";
+        };
+        label = "leds";
+    };
 };
