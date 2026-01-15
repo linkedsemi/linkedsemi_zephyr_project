@@ -15,6 +15,7 @@
 #include <wolfssl/wolfcrypt/types.h>
 #include "mbedtls/sha256.h"
 #include "mbedtls/sha512.h"
+#include "ls_hal_otbn_sha.h"
 
 static int devId = INVALID_DEVID;
 typedef struct testVector {
@@ -649,6 +650,152 @@ int sha512_test(void)
     return 0;
 }
 
+int hw_otbn_sm3_test(const unsigned char *plaintext, size_t plaintext_len)
+{
+    const unsigned char * in_buf = NULL;
+    size_t in_len;
+    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
+
+    HAL_OTBN_SM3_Init();
+
+    for(int i = 0; i <= trans_count; i++) {
+        if(trans_count == 0)
+        {
+            in_buf = plaintext;
+            in_len = plaintext_len;
+        }
+        else if((i == trans_count) && (trans_count > 0)){
+            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
+            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
+        }
+        else{
+            in_buf = plaintext + TEST_STEP_SIZE * i;
+            in_len = TEST_STEP_SIZE;
+        }
+
+        HAL_OTBN_SM3_Update((uint8_t *)in_buf, in_len);
+    }
+
+    HAL_OTBN_SM3_Final(hw_sm3_result);
+
+    return 0;
+}
+
+int otbn_sm3_test(void)
+{
+    wc_Sm3 sw_sha;
+
+    for(uint32_t test_plaintext_len = 0; test_plaintext_len <= TEST_TOTAL_SIZE; test_plaintext_len++)
+    {
+        printk("test_plaintext_len: %d\n", test_plaintext_len);
+        memset(sw_sm3_result, 0, WC_SM3_DIGEST_SIZE);
+        memset(hw_sm3_result, 0, WC_SM3_DIGEST_SIZE);
+
+        if(test_plaintext_len > 0)
+        {
+            memset(sha_plaintext_buf, 2, test_plaintext_len);
+        }
+
+        wc_InitSm3(&sw_sha, NULL, devId);
+
+        sw_sm3_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
+
+        HAL_OTBN_Init();
+
+        hw_otbn_sm3_test((char*)sha_plaintext_buf, (size_t)test_plaintext_len);
+
+        printk("sw out result: ");
+        print_hex(sw_sm3_result, WC_SM3_DIGEST_SIZE);
+        printk("\n");
+
+        printk("hw out result: ");
+        print_hex(hw_sm3_result, WC_SM3_DIGEST_SIZE);
+        printk("\n");
+
+        printk("out compare result: ");
+        if (memcmp(sw_sm3_result, hw_sm3_result, WC_SM3_DIGEST_SIZE) == 0) {
+            printk("compare pass\n");
+        } else {
+            printk("compare fail\n");
+            __ASSERT_NO_MSG(0);
+        }
+    }
+    return 0;
+}
+
+int hw_otbn_sha256_test(const unsigned char *plaintext, size_t plaintext_len)
+{
+    const unsigned char * in_buf = NULL;
+    size_t in_len;
+    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
+
+    HAL_OTBN_SHA256_Init();
+
+    for(int i = 0; i <= trans_count; i++) {
+        if(trans_count == 0)
+        {
+            in_buf = plaintext;
+            in_len = plaintext_len;
+        }
+        else if((i == trans_count) && (trans_count > 0)){
+            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
+            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
+        }
+        else{
+            in_buf = plaintext + TEST_STEP_SIZE * i;
+            in_len = TEST_STEP_SIZE;
+        }
+
+        HAL_OTBN_SHA256_Update((uint8_t *)in_buf, in_len);
+    }
+
+    HAL_OTBN_SHA256_Final(hw_hash256_result);
+
+    return 0;
+}
+
+int otbn_sha256_test(void)
+{
+    wc_Sha256 sw_sha;
+
+    for(uint32_t test_plaintext_len = 0; test_plaintext_len <= TEST_TOTAL_SIZE; test_plaintext_len++)
+    {
+        printk("test_plaintext_len: %d\n", test_plaintext_len);
+        memset(sw_hash256_result, 0, WC_SHA256_DIGEST_SIZE);
+        memset(hw_hash256_result, 0, WC_SHA256_DIGEST_SIZE);
+
+        if(test_plaintext_len > 0)
+        {
+            memset(sha_plaintext_buf, 2, test_plaintext_len);
+        }
+
+        wc_InitSha256_ex(&sw_sha, NULL, devId);
+
+        sw_sha256_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
+
+        HAL_OTBN_Init();
+
+        hw_otbn_sha256_test((char*)sha_plaintext_buf, (size_t)test_plaintext_len);
+
+        printk("sw out result: ");
+        print_hex(sw_hash256_result, WC_SHA256_DIGEST_SIZE);
+        printk("\n");
+
+        printk("hw out result: ");
+        print_hex(hw_hash256_result, WC_SHA256_DIGEST_SIZE);
+        printk("\n");
+
+        printk("out compare result: ");
+        if (memcmp(sw_hash256_result, hw_hash256_result, WC_SHA256_DIGEST_SIZE) == 0) {
+            printk("compare pass\n");
+        } else {
+            printk("compare fail\n");
+            __ASSERT_NO_MSG(0);
+        }
+    }
+    return 0;
+}
+
 int main(void)
 {
     int ret;
@@ -677,6 +824,16 @@ int main(void)
         printk("SHA-512  test failed!\n");
     else
         printk("SHA-512  test passed!\n");
+
+    if ( (ret = otbn_sm3_test()) != 0)
+        printk("OTBN SM3  test failed!\n");
+    else
+        printk("OTBN SM3  test passed!\n");
+
+    if ( (ret = otbn_sha256_test()) != 0)
+        printk("OTBN SHA256  test failed!\n");
+    else
+        printk("OTBN SHA256  test passed!\n");
 
     return 0;
 }
