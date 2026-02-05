@@ -1,0 +1,25 @@
+/*
+ * Copyright (c) 2023 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+zephyr_udc1: &usb1 {
+    status = "okay";
+};
+
+/ {
+	ramdisk0 {
+		compatible = "zephyr,ram-disk";
+		disk-name = "USB2";
+		sector-size = <512>;
+		sector-count = <192>;
+	};
+
+	ramdisk1 {
+		compatible = "zephyr,ram-disk";
+		disk-name = "USB";
+		sector-size = <512>;
+		sector-count = <192>;
+	};
+};
