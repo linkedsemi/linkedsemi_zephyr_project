@@ -63,7 +63,7 @@ void main(void)
         .tm_year = 123,
         .tm_mon  = 02,
         .tm_mday = 28,
-        .tm_wday = 7,
+        .tm_wday = 6,
         .tm_hour = 23,
         .tm_min  = 59,
         .tm_sec  = 55
@@ -76,7 +76,7 @@ void main(void)
     }
 
     LOG_INF("RTC time set to:  %04d.%02d.%02d %s %02d:%02d:%02d\n",
-           set_tm.tm_year + 1900, set_tm.tm_mon, set_tm.tm_mday, weekday_str[set_tm.tm_wday-1],
+           set_tm.tm_year + 1900, set_tm.tm_mon, set_tm.tm_mday, weekday_str[set_tm.tm_wday],
            set_tm.tm_hour, set_tm.tm_min, set_tm.tm_sec);
 
            k_sleep(K_SECONDS(1));
@@ -105,7 +105,7 @@ void main(void)
     rtc_alarm_set_time(rtc, 0, alarm_mask, &alarm_tm);
 
     LOG_INF("Alarm time set to:  %04d.%02d.%02d %s %02d:%02d:%02d\n",
-           alarm_tm.tm_year + 1900, alarm_tm.tm_mon, alarm_tm.tm_mday, weekday_str[alarm_tm.tm_wday-1],
+           alarm_tm.tm_year + 1900, alarm_tm.tm_mon, alarm_tm.tm_mday, weekday_str[alarm_tm.tm_wday],
            alarm_tm.tm_hour, alarm_tm.tm_min, alarm_tm.tm_sec);
 
     struct rtc_time alarm_readback;
@@ -115,7 +115,7 @@ void main(void)
 
         LOG_INF(">>> [ReadBack Alarm] %04d.%02d.%02d %s %02d:%02d:%02d\n",
                alarm_readback.tm_year + 1900, alarm_readback.tm_mon, alarm_readback.tm_mday,
-               weekday_str[alarm_readback.tm_wday - 1],
+               weekday_str[alarm_readback.tm_wday],
                alarm_readback.tm_hour, alarm_readback.tm_min, alarm_readback.tm_sec);
                LOG_INF(">>> Alarm mask: 0x%04x\n", alarm_mask_read);
     } else {
@@ -155,7 +155,7 @@ void main(void)
         rtc_get_time(rtc, &now);
 
         LOG_INF("[LOOP] Current RTC time: %04d.%02d.%02d %s %02d:%02d:%02d\n",
-                now.tm_year + 1900, now.tm_mon, now.tm_mday,  weekday_str[now.tm_wday-1],
+                now.tm_year + 1900, now.tm_mon, now.tm_mday,  weekday_str[now.tm_wday],
                 now.tm_hour, now.tm_min, now.tm_sec);
 
         // ============ alarm_is_pending =============
