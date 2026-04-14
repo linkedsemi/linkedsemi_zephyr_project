@@ -1,0 +1,166 @@
+#if !defined(DT_SIZE_G)
+#define DT_SIZE_G(x) (DT_SIZE_M(x) * 1024)
+#endif
+
+&soc {
+    iopmp1_partitions: iopmp1_partitions {
+        compatible = "fixed-partitions";
+        #address-cells = <1>;
+        #size-cells = <2>;
+
+        a_iopmp1_partition: iopmp1_partitions@1000000 {
+            label = "a_iopmp1_partition";
+            reg = <0x1000000 0x0 DT_SIZE_K(64)>;
+            attr = <PMP_R>;
+        };
+        b_iopmp1_partition: iopmp1_partitions@100c0000 {
+            label = "b_iopmp1_partition";
+            reg = <(0x10000000 + DT_SIZE_K(768)) 0x0 DT_SIZE_K(256)>;
+            attr = <0>;
+        };
+        c_iopmp1_partition: iopmp1_partitions@10100000 {
+            label = "c_iopmp1_partition";
+            reg = <(0x10000000 + DT_SIZE_K(768) + DT_SIZE_K(256)) 0x0 DT_SIZE_K(256)>;
+            attr = <0>;
+        };
+        d_iopmp1_partition: iopmp1_partitions@0 {
+            label = "d_iopmp1_partition";
+            reg = <0x0 0x4 0x0>;
+            attr = <(PMP_R | PMP_W | PMP_X)>;
+        };
+    };
+
+    iopmp2_partitions: iopmp2_partitions {
+        compatible = "fixed-partitions";
+        #address-cells = <1>;
+        #size-cells = <2>;
+
+        calc_sha_iopmp2_partition: iopmp2_partitions@40002800 {
+            label = "calc_sha_iopmp2_partition";
+            reg = <0x40002800 0x0 DT_SIZE_K(1)>;
+            attr = <(PMP_R | PMP_W)>;
+        };
+        nist_trng_iopmp2_partition: iopmp2_partitions@40004000 {
+            label = "nist_trng_iopmp2_partition";
+            reg = <0x40004000 0x0 DT_SIZE_K(16)>;
+            attr = <(PMP_R | PMP_W)>;
+        };
+        sec_cpu_intr_iopmp2_partition: iopmp2_partitions@40022028 {
+            label = "sec_cpu_intr_iopmp2_partition";
+            reg = <(0x40022000 + 0x28) 0x0 8>;
+            attr = <(PMP_R | PMP_W)>;
+        };
+        calc_aes_iopmp2_partition: iopmp2_partitions_duplicate1@40029000 {
+            label = "calc_aes_iopmp2_partition";
+            reg = <0x40029000 0x0 DT_SIZE_K(2)>;
+            attr = <(PMP_R | PMP_W)>;
+        };
+        i2c1_iopmp2_partition: iopmp2_partitions_duplicate1@400a0000 {
+            label = "i2c1_iopmp2_partition";
+            reg = <0x400a0000 0x0 DT_SIZE_K(4)>;
+            attr = <(PMP_R | PMP_W)>;
+        };
+        per1_iopmp2_partition: iopmp2_partitions@40000000 {
+            label = "per1_iopmp2_partition";
+            reg = <0x40000000 0x0 DT_SIZE_K(256)>;
+            attr = <0>;
+        };
+        per2_iopmp2_partition: iopmp2_partitions_duplicate2@400a0000 {
+            label = "per2_iopmp2_partition";
+            reg = <0x400a0000 0x0 DT_SIZE_K(32)>;
+            attr = <0>;
+        };
+        all_iopmp2_partition: iopmp2_partitions_duplicate2@40029000 {
+            label = "all_iopmp2_partition";
+            reg = <0x0 0x4 0x0>;
+            attr = <(PMP_R | PMP_W | PMP_X)>;
+        };
+    };
+
+    iopmp3_partitions: iopmp3_partitions {
+        compatible = "fixed-partitions";
+        #address-cells = <1>;
+        #size-cells = <2>;
+
+        sram1_iopmp3_partition: sram_partitions@100c0000 {
+            label = "sram1_iopmp3_partition";
+            reg = <(0x10000000 + DT_SIZE_K(768)) 0x0 DT_SIZE_K(256)>;
+            attr = <0>;
+        };
+        sram2_iopmp3_partition: iopmp3_partitions@10100000 {
+            label = "sram2_iopmp3_partition";
+            reg = <(0x10000000 + DT_SIZE_K(768) + DT_SIZE_K(256)) 0x0 DT_SIZE_K(256)>;
+            attr = <0>;
+        };
+        calc_sha_iopmp3_partition: iopmp3_partitions@40002800 {
+            label = "calc_sha_iopmp3_partition";
+            reg = <0x40002800 0x0 DT_SIZE_K(1)>;
+            attr = <(PMP_R | PMP_W)>;
+        };
+        nist_trng_iopmp3_partition: iopmp3_partitions@40004000 {
+            label = "nist_trng_iopmp3_partition";
+            reg = <0x40004000 0x0 DT_SIZE_K(16)>;
+            attr = <(PMP_R | PMP_W)>;
+        };
+        calc_aes_iopmp3_partition: iopmp3_partitions@40029000 {
+            label = "calc_aes_iopmp3_partition";
+            reg = <0x40029000 0x0 DT_SIZE_K(2)>;
+            attr = <(PMP_R | PMP_W)>;
+        };
+        per1_iopmp3_partition: iopmp3_partitions@40000000 {
+            label = "per1_iopmp3_partition";
+            reg = <0x40000000 0x0 DT_SIZE_K(256)>;
+            attr = <0>;
+        };
+        per2_iopmp3_partition: iopmp3_partitions@400a0000 {
+            label = "per2_iopmp3_partition";
+            reg = <0x400a0000 0x0 DT_SIZE_K(32)>;
+            attr = <0>;
+        };
+        all_iopmp3_partition: iopmp3_partitions@0 {
+            label = "all_iopmp3_partition";
+            reg = <0x0 0x4 0x0>;
+            attr = <(PMP_R | PMP_W | PMP_X)>;
+        };
+    };
+
+    iopmp1: iopmp@40001000 {
+        compatible = "linkedsemi,iopmp";
+        reg = <0x40001000 DT_SIZE_K(1)>;
+        clocks = <IOPMP_CLOCK>;
+        resets = <IOPMP_RESET>;
+        partitions = <&iopmp1_partitions>;
+    };
+
+    iopmp2: iopmp@40001400 {
+        compatible = "linkedsemi,iopmp";
+        reg = <0x40001400 DT_SIZE_K(1)>;
+        clocks = <IOPMP_CLOCK>;
+        resets = <IOPMP_RESET>;
+        partitions = <&iopmp2_partitions>;
+    };
+
+    iopmp3: iopmp@40001800 {
+        compatible = "linkedsemi,iopmp";
+        reg = <0x40001800 DT_SIZE_K(1)>;
+        clocks = <IOPMP_CLOCK>;
+        resets = <IOPMP_RESET>;
+        partitions = <&iopmp3_partitions>;
+    };
+
+    iopmp4: iopmp@40001C00 {
+        compatible = "linkedsemi,iopmp";
+        reg = <0x40001C00 DT_SIZE_K(1)>;
+        clocks = <IOPMP_CLOCK>;
+        resets = <IOPMP_RESET>;
+        partitions = <&iopmp3_partitions>;
+    };
+
+    iopmp5: iopmp@40002000 {
+        compatible = "linkedsemi,iopmp";
+        reg = <0x40002000 DT_SIZE_K(1)>;
+        clocks = <IOPMP_CLOCK>;
+        resets = <IOPMP_RESET>;
+        partitions = <&iopmp3_partitions>;
+    };
+};
