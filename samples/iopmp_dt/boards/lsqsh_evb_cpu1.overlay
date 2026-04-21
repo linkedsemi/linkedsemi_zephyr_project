@@ -1,6 +1,12 @@
-#if !defined(DT_SIZE_G)
-#define DT_SIZE_G(x) (DT_SIZE_M(x) * 1024)
-#endif
+/*
+template:
+    a_iopmp1_partition: iopmp1_partitions@1000000 {
+        label = "a_iopmp1_partition";
+              /* addr    size_high_32bit  size_low_32bit */
+        reg = <0x1000000 0x0000000        DT_SIZE_K(64)>;
+        attr = <0>;
+    };
+*/
 
 &soc {
     iopmp1_partitions: iopmp1_partitions {
@@ -11,20 +17,15 @@
         a_iopmp1_partition: iopmp1_partitions@1000000 {
             label = "a_iopmp1_partition";
             reg = <0x1000000 0x0 DT_SIZE_K(64)>;
-            attr = <PMP_R>;
+            attr = <0>;
         };
         b_iopmp1_partition: iopmp1_partitions@100c0000 {
             label = "b_iopmp1_partition";
-            reg = <(0x10000000 + DT_SIZE_K(768)) 0x0 DT_SIZE_K(256)>;
+            reg = <(0x10000000 + DT_SIZE_K(768)) 0x0 DT_SIZE_K(512)>;
             attr = <0>;
         };
-        c_iopmp1_partition: iopmp1_partitions@10100000 {
+        c_iopmp1_partition: iopmp1_partitions@0 {
             label = "c_iopmp1_partition";
-            reg = <(0x10000000 + DT_SIZE_K(768) + DT_SIZE_K(256)) 0x0 DT_SIZE_K(256)>;
-            attr = <0>;
-        };
-        d_iopmp1_partition: iopmp1_partitions@0 {
-            label = "d_iopmp1_partition";
             reg = <0x0 0x4 0x0>;
             attr = <(PMP_R | PMP_W | PMP_X)>;
         };
