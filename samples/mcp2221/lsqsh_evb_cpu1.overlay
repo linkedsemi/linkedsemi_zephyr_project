@@ -1,0 +1,32 @@
+
+&pinctrl {
+    /omit-if-no-ref/usb1_dp_pc00: usb1_dp_pc00 {
+        pinmux = <USB1_DP_FUNC1_IDX24_PINMUX_PC(00)>;
+        input-enable;
+    };
+    /omit-if-no-ref/usb1_dm_pc01: usb1_dm_pc01 {
+        pinmux = <USB1_DM_FUNC1_IDX25_PINMUX_PC(01)>;
+        input-enable;
+    };
+    /omit-if-no-ref/usb1_dp_gpio_pc00: usb1_dp_gpio_pc00 {
+        pinmux = <PC00>;
+        gpio;
+        output-enable;
+    };
+
+    /omit-if-no-ref/usb1_dm_gpio_pc01: usb1_dm_gpio_pc01 {
+        pinmux = <PC01>;
+        gpio;
+        output-enable;
+    };
+};
+
+&usb1 {
+    pinctrl-0 = <&usb1_dp_pc00 &usb1_dm_pc01>;
+    pinctrl-1 = <&usb1_dp_gpio_pc00 &usb1_dm_gpio_pc01>;
+    dp-gpios = < &gpioc 0 GPIO_ACTIVE_HIGH>;
+    pinctrl-names = "default", "priv_start";
+};
+zephyr_udc1: &usb1 {
+    status = "okay";
+};
