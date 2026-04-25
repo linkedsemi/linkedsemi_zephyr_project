@@ -125,6 +125,7 @@ template:
         };
     };
 
+    /* APP_CPUI/APP_CPUD */
     iopmp1: iopmp@40001000 {
         compatible = "linkedsemi,iopmp";
         reg = <0x40001000 DT_SIZE_K(1)>;
@@ -133,6 +134,7 @@ template:
         partitions = <&iopmp1_partitions>;
     };
 
+    /* APP_CPUS */
     iopmp2: iopmp@40001400 {
         compatible = "linkedsemi,iopmp";
         reg = <0x40001400 DT_SIZE_K(1)>;
@@ -141,6 +143,7 @@ template:
         partitions = <&iopmp2_partitions>;
     };
 
+    /* DMAC1/ETH1/EMMC1 */
     iopmp3: iopmp@40001800 {
         compatible = "linkedsemi,iopmp";
         reg = <0x40001800 DT_SIZE_K(1)>;
@@ -149,6 +152,7 @@ template:
         partitions = <&iopmp3_partitions>;
     };
 
+    /* DMAC2/ETH2/EMMC2 */
     iopmp4: iopmp@40001C00 {
         compatible = "linkedsemi,iopmp";
         reg = <0x40001C00 DT_SIZE_K(1)>;
@@ -157,6 +161,7 @@ template:
         partitions = <&iopmp3_partitions>;
     };
 
+    /* USB2/SHA512/LTPI */
     iopmp5: iopmp@40002000 {
         compatible = "linkedsemi,iopmp";
         reg = <0x40002000 DT_SIZE_K(1)>;
