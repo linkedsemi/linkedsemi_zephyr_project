@@ -22,7 +22,6 @@
 #include <zephyr/sys/barrier.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/storage/disk_access.h>
-#include <sdhci-of-linkedsemi.h>
 #include "stdio.h"
 #ifdef CONFIG_DEBUG_COREDUMP_BACKEND_EMMC
 /* Test buffer for eMMC bare-metal read/write test */
@@ -55,11 +54,6 @@ static volatile uint32_t test_memory_area[16] __noinit;
 static volatile bool crash_occurred = false;
 
 #define THREAD_STATE_TERMINATED BIT(3)
-
-/* Zephyr SD card structure for stack-based test */
-#ifdef CONFIG_DEBUG_COREDUMP_BACKEND_EMMC
-static const struct device *sdhc_dev;
-#endif
 
 /**
  * @brief Test eMMC using Zephyr disk access API (disk_access_read/disk_access_write)
@@ -268,11 +262,9 @@ static void verify_entry(void *p1, void *p2, void *p3)
 			break;
 		}
 
-		/* Print first few chunks in hex with #CD: prefix for log parser */
-		if (offset < 512) {
-			LOG_INF("[Thread2] --- Coredump data at offset %zu ---", offset);
-			print_coredump_hex(coredump_read_buf, ret);
-		}
+		/* Print all coredump chunks in hex with #CD: prefix for log parser */
+		LOG_INF("[Thread2] --- Coredump data at offset %zu ---", offset);
+		print_coredump_hex(coredump_read_buf, ret);
 
 		offset += ret;
 	}
