@@ -1,0 +1,35 @@
+/*
+ * Copyright (c) 2025 LinkedSemi
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * eMMC partition layout - linked to mmc_disk1 (SD2)
+ * SD card capacity: 15269888 sectors (7.28 GiB)
+ *
+ * Layout:
+ *   Sector 0:          MBR (512 bytes)
+ *   Sector 1-2047:    Reserved area (1 MB - 512 bytes)
+ *   Sector 2048+:     User partition (FAT32)
+ *   Sector N+:        Coredump partition (10 MB)
+ */
+#define MBR_AREA_BYTES      0x100000                      /* 1 MB: MBR + reserved */
+#define COREDUMP_PART_BYTES 0xA00000                      /* 10 MB */
+#define TOTAL_CAPACITY_BYTES (15269888 * 512)             /* 7.28 GiB */
+#define USER_PART_BYTES     (TOTAL_CAPACITY_BYTES - MBR_AREA_BYTES - COREDUMP_PART_BYTES)
+
+&mmc_disk1 {
+    /* eMMC partition info - child node of mmc_disk1 (SD2) */
+    emmc_parts: emmc-partitions {
+        compatible = "linkedsemi,emmc-partitions";
+
+        /* MBR/Management area size */
+        mbr-area-size = <MBR_AREA_BYTES>;
+
+        /* User partition (FAT32) size */
+        user-partition-size = <(USER_PART_BYTES / 512)>;
+
+        /* Coredump partition size */
+        coredump-partition-size = <(COREDUMP_PART_BYTES / 512)>;
+    };
+};

@@ -19,110 +19,97 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/debug/coredump.h>
-#include <zephyr/sys/barrier.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/storage/disk_access.h>
+#include "emmc_partition.h"
 #include "stdio.h"
-#ifdef CONFIG_DEBUG_COREDUMP_BACKEND_EMMC
-/* Test buffer for eMMC bare-metal read/write test */
-#define EMMC_TEST_OFFSET    0
-#define EMMC_TEST_SIZE      512
-static uint8_t emmc_test_write_buf[EMMC_TEST_SIZE] __aligned(CONFIG_SDHC_BUFFER_ALIGNMENT);
-static uint8_t emmc_test_read_buf[EMMC_TEST_SIZE] __aligned(CONFIG_SDHC_BUFFER_ALIGNMENT);
-
-/* Forward declarations for HAL functions */
-extern uint32_t hal_mmc_write_blocks(uint32_t mapbase, const uint8_t *wbuf, uint32_t start_block, uint32_t num_blocks);
-extern uint32_t hal_mmc_read_blocks(uint32_t mapbase, uint8_t *rbuf, uint32_t start_block, uint32_t num_blocks);
-#endif
 
 LOG_MODULE_REGISTER(coredump_emmc_test, CONFIG_KERNEL_LOG_LEVEL);
+
+#ifdef CONFIG_FS_FATFS_MULTI_PARTITION
+#include <zephyr/fs/fs.h>
+#include <ff.h>
+
+static FATFS fs_part1;
+
+static int test_fatfs_read_write(void)
+{
+	struct fs_file_t fil;
+	int ret;
+	char write_data[] = "Hello from eMMC FAT32 Partition 1!\n";
+	char read_buf[64] = {0};
+
+	LOG_INF("=== FATFS Read/Write Test ===");
+
+	struct fs_mount_t mp1 = {
+		.type = FS_FATFS,
+		.fs_data = &fs_part1,
+		.mnt_point = EMMC_FATFS_MOUNT_POINT,
+	};
+
+	LOG_INF("Mounting partition 1 at %s...", EMMC_FATFS_MOUNT_POINT);
+	ret = fs_mount(&mp1);
+	if (ret < 0) {
+		LOG_ERR("fs_mount failed: %d", ret);
+		return ret;
+	}
+	LOG_INF("Partition 1 mounted successfully");
+
+	/* Write test */
+	fs_file_t_init(&fil);
+	ret = fs_open(&fil, EMMC_FATFS_MOUNT_POINT "/test.txt", FS_O_CREATE | FS_O_WRITE);
+	if (ret < 0) {
+		LOG_ERR("fs_open write failed: %d", ret);
+		fs_unmount(&mp1);
+		return ret;
+	}
+
+	ret = fs_write(&fil, write_data, strlen(write_data));
+	if (ret < 0) {
+		LOG_ERR("fs_write failed: %d", ret);
+		fs_close(&fil);
+		fs_unmount(&mp1);
+		return ret;
+	}
+	LOG_INF("Wrote %d bytes to %s/test.txt", ret, EMMC_FATFS_MOUNT_POINT);
+	fs_sync(&fil);
+	fs_close(&fil);
+
+	/* Read test */
+	fs_file_t_init(&fil);
+	ret = fs_open(&fil, EMMC_FATFS_MOUNT_POINT "/test.txt", FS_O_READ);
+	if (ret < 0) {
+		LOG_ERR("fs_open read failed: %d", ret);
+		fs_unmount(&mp1);
+		return ret;
+	}
+
+	memset(read_buf, 0, sizeof(read_buf));
+	ret = fs_read(&fil, read_buf, sizeof(read_buf) - 1);
+	if (ret < 0) {
+		LOG_ERR("fs_read failed: %d", ret);
+		fs_close(&fil);
+		fs_unmount(&mp1);
+		return ret;
+	}
+	read_buf[ret] = '\0';
+	LOG_INF("Read %d bytes: %s", ret, read_buf);
+	fs_close(&fil);
+
+	/* Unmount */
+	fs_unmount(&mp1);
+
+	LOG_INF("=== FATFS Test PASSED ===");
+	return 0;
+}
+#endif /* CONFIG_FS_FATFS_MULTI_PARTITION */
 
 struct k_thread crash_thread;
 struct k_thread verify_thread;
 K_THREAD_STACK_DEFINE(crash_stack, CONFIG_MAIN_STACK_SIZE);
 K_THREAD_STACK_DEFINE(verify_stack, CONFIG_MAIN_STACK_SIZE);
 
-/* Synchronization between threads - use flag instead of k_event */
-static volatile bool crash_event_flag;
-static volatile uint32_t crash_count;
-
-/* Pattern that will be written to memory before crash for verification */
-#define TEST_PATTERN_VALUE 0xDEADBEEF
-static volatile uint32_t test_memory_area[16] __noinit;
-
-/* Flag to track if we should read coredump (set after crash) */
-static volatile bool crash_occurred = false;
-
 #define THREAD_STATE_TERMINATED BIT(3)
-
-/**
- * @brief Test eMMC using Zephyr disk access API (disk_access_read/disk_access_write)
- *
- * This tests the standard Zephyr disk access functions which go through
- * the SD/MMC driver stack.
- * @return true if test passed, false if failed
- */
-static bool test_emmc_zephyr_rw(void)
-{
-#ifdef CONFIG_DEBUG_COREDUMP_BACKEND_EMMC
-	int ret;
-	int i;
-
-	printf("========================================\n");
-	printf("eMMC Zephyr Disk Access R/W Test\n");
-	printf("========================================\n");
-
-	/* Prepare test data */
-	memset(emmc_test_write_buf, 0, sizeof(emmc_test_write_buf));
-	for (i = 0; i < EMMC_TEST_SIZE; i++) {
-		emmc_test_write_buf[i] = (uint8_t)(i & 0xFF);
-	}
-
-	printf("Test: Writing %d bytes to eMMC at block %d...\n", EMMC_TEST_SIZE, EMMC_TEST_OFFSET / 512);
-	printf("[DEBUG] write_buf[0..3] = 0x%02X 0x%02X 0x%02X 0x%02X\n",
-	       emmc_test_write_buf[0], emmc_test_write_buf[1],
-	       emmc_test_write_buf[2], emmc_test_write_buf[3]);
-
-	/* Write using disk access */
-	ret = disk_access_write("SD2", emmc_test_write_buf, EMMC_TEST_OFFSET / 512, 1);
-	if (ret != 0) {
-		printf("ERROR: disk_access_write failed: %d\n", ret);
-		return false;
-	}
-	printf("disk_access_write succeeded!\n");
-
-	/* Read using disk access */
-	memset(emmc_test_read_buf, 0, sizeof(emmc_test_read_buf));
-	ret = disk_access_read("SD2", emmc_test_read_buf, EMMC_TEST_OFFSET / 512, 1);
-	if (ret != 0) {
-		printf("ERROR: disk_access_read failed: %d\n", ret);
-		return false;
-	}
-	printf("disk_access_read succeeded!\n");
-
-	printf("[DEBUG] read_buf[0..3] = 0x%02X 0x%02X 0x%02X 0x%02X\n",
-	       emmc_test_read_buf[0], emmc_test_read_buf[1],
-	       emmc_test_read_buf[2], emmc_test_read_buf[3]);
-
-	/* Verify data */
-	printf("Verifying data...\n");
-	for (i = 0; i < EMMC_TEST_SIZE; i++) {
-		if (emmc_test_read_buf[i] != emmc_test_write_buf[i]) {
-			printf("ERROR: Data mismatch at byte %d: wrote 0x%02X, read 0x%02X\n",
-				i, emmc_test_write_buf[i], emmc_test_read_buf[i]);
-			while(1);
-		}
-	}
-
-	printf("========================================\n");
-	printf("eMMC Zephyr Disk Access R/W Test PASSED!\n");
-	printf("========================================\n");
-	return true;
-#else
-	printf("eMMC Zephyr disk access test skipped - CONFIG_DEBUG_COREDUMP_EMMC not enabled\n");
-	return false;
-#endif
-}
 
 /* Turn off optimizations to prevent the compiler from optimizing this away
  * due to the null pointer dereference.
@@ -183,7 +170,7 @@ static void print_coredump_hex(const uint8_t *data, size_t len)
 }
 
 /* Static buffer for reading coredump - no malloc allowed */
-static uint8_t coredump_read_buf[5120];
+static uint8_t coredump_read_buf[5120] __aligned(CONFIG_SDHC_BUFFER_ALIGNMENT);
 
 /**
  * @brief Thread 2: Monitors for crash and reads coredump from eMMC
@@ -198,19 +185,11 @@ static void verify_entry(void *p1, void *p2, void *p3)
 	LOG_INF("[Thread2] Starting - waiting for crash in Thread1...");
 
 	while (1) {
-		/* Use busy wait instead of k_sleep to avoid scheduler issues during crash handling */
-		// k_busy_wait(1000000);  /* 1 second */
-		k_sleep(K_MSEC(1)); 
-		/* Check if crash occurred via flag */
-		if (crash_event_flag) {
-			LOG_INF("[Thread2] Crash event detected!");
-			break;
-		}
+		k_sleep(K_MSEC(1));
 
-		/* Alternative: check if crash thread terminated */
+		/* Check if crash thread terminated */
 		if (crash_thread.base.thread_state & THREAD_STATE_TERMINATED) {
 			LOG_INF("[Thread2] Detected crash_thread terminated");
-			crash_occurred = true;
 			break;
 		}
 
@@ -218,12 +197,8 @@ static void verify_entry(void *p1, void *p2, void *p3)
 			crash_thread.base.thread_state);
 	}
 
-	/* Wait a bit for coredump to complete */
-	// k_busy_wait(2000000);  /* 2 seconds - wait for coredump to complete */
-	k_sleep(K_MSEC(3)); 
-
-	//Ensure that the coredump storage space in the SD card has not been erased.
-	test_emmc_zephyr_rw();
+	/* Wait for coredump to complete */
+	k_sleep(K_MSEC(3));
 
 	LOG_INF("[Thread2] Attempting to read coredump from eMMC...");
 
@@ -277,55 +252,15 @@ static void verify_entry(void *p1, void *p2, void *p3)
 		LOG_ERR("[Thread2] Coredump read incomplete: %zu / %d bytes", offset, dump_size);
 	}
 
-	/* Erase coredump after reading */
-	// ret = coredump_cmd(COREDUMP_CMD_ERASE_STORED_DUMP, NULL);
-	// if (ret == 0) {
-	// 	LOG_INF("[Thread2] Coredump erased after reading");
-	// } else {
-	// 	LOG_ERR("[Thread2] Failed to erase coredump: %d", ret);
-	// }
+	LOG_INF("[Thread2] Test complete");
+	LOG_INF("Pleae test coredump shell, use cmd :'coredump_emmc xxxx'");
 
-	if(test_emmc_zephyr_rw() == true)
-	{
-		LOG_INF("[Thread2] Test complete");
-		LOG_INF("Pleae test coredump shell, use cmd :'coredump_emmc xxxx'");
-	}
-
-}
-
-/**
- * @brief Initialize eMMC coredump backend
- *
- * Uses Zephyr's disk access layer to initialize the eMMC card.
- * After this, the card is in TRAN state and ready for read/write.
- *
- * @return 0 if successful, negative errno on error
- */
-static int init_emmc_backend(void)
-{
-#ifdef CONFIG_DEBUG_COREDUMP_BACKEND_EMMC
-	int ret;
-
-	LOG_INF("Initializing eMMC coredump backend...");
-
-	/* Initialize eMMC via Zephyr's disk access layer.
-	 * This calls the SDHC driver which initializes the card
-	 * (CMD0, CMD1, CMD2, CMD3, CMD7) and puts it in TRAN state.
-	 */
-	static const char *disk_pdrv = "SD2";
-	ret = disk_access_ioctl(disk_pdrv, DISK_IOCTL_CTRL_INIT, NULL);
-	if (ret != 0) {
-		LOG_ERR("DISK_IOCTL_CTRL_INIT failed: %d", ret);
-		return ret;
-	}
-	LOG_INF("eMMC disk initialized successfully");
-	LOG_INF("eMMC coredump backend initialized");
-
-	return 0;
-#else
-	LOG_INF("eMMC coredump backend not enabled (CONFIG_DEBUG_COREDUMP_EMMC)");
-	return -ENODEV;
+#ifdef CONFIG_FS_FATFS_MULTI_PARTITION
+	/* Test FATFS read/write after coredump read */
+	LOG_INF("[Thread2] Testing FATFS after coredump...");
+	test_fatfs_read_write();
 #endif
+
 }
 
 int main(void)
@@ -343,8 +278,9 @@ int main(void)
 		return 0;
 	}
 
-#ifdef CONFIG_DEBUG_COREDUMP_BACKEND_EMMC
-	test_emmc_zephyr_rw();
+#ifdef CONFIG_FS_FATFS_MULTI_PARTITION
+	/* Test FATFS partition read/write - partition already created in init_emmc_backend */
+	test_fatfs_read_write();
 #endif
 
 	LOG_INF("Creating crash thread (Thread1)...");
