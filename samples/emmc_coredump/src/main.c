@@ -44,7 +44,8 @@ static int test_fatfs_read_write(void)
 	struct fs_mount_t mp1 = {
 		.type = FS_FATFS,
 		.fs_data = &fs_part1,
-		.mnt_point = EMMC_FATFS_MOUNT_POINT,
+		// .mnt_point = EMMC_FATFS_MOUNT_POINT,
+		.mnt_point = "/SD2",
 	};
 
 	LOG_INF("Mounting partition 1 at %s...", EMMC_FATFS_MOUNT_POINT);

@@ -27,7 +27,54 @@
 | Partition 1 | FAT32 用户数据 | `fs_mount` 挂载到 `/4:` | ~7.27 GB |
 | Partition 2 | Coredump 存储 | `disk_access` 裸扇区访问 | 10 MB |
 
-## 设备树配置
+## FatFs 多分区访问原理
+
+### 核心数据结构
+
+FatFs 通过两个数组实现 pdrv（物理驱动器）到实际分区的映射：
+
+```c
+// 1. FF_VOLUME_STRS - volume ID 字符串表（Zephyr 固定在 ffconf.h）
+#define FF_VOLUME_STRS  "RAM","NAND","CF","SD","SD2","USB","USB2","USB3"
+// index:                0      1     2    3    4     5     6      7
+
+// 2. VolToPart[] - pdrv 到物理设备+分区的映射（在 emmc_partition.c 中定义）
+//    格式：{pdrv, partition}，pdrv 是 FF_VOLUME_STRS 的索引
+PARTITION VolToPart[FF_VOLUMES] = {
+    {0xFF, 0}, {0xFF, 0}, {0xFF, 0}, {0xFF, 0},
+    {EMMC_PDRIVE, 1},  // EMMC_PDRIVE = 4，pdrv 4 → partition 1
+    {0xFF, 0}, {0xFF, 0}, {0xFF, 0},
+};
+```
+
+### 路径解析流程
+
+当调用 `fs_open("/4:/test.txt")` 或 `fs_open("/SD2:/test.txt")` 时：
+
+```raw
+1. "/SD2: " :解析 volume ID → 获取 pdrv index
+   "/SD2:/test.txt"  →  遍历 VolumeStr[] 匹配 "SD2"  →  index 4  →  pdrv = 4
+   "/4:/test.txt"    →  直接解析 "4"  →  pdrv = 4
+
+2. "/4: " :通过 pdrv 直接索引 VolToPart[]
+   pdrv = 4  →  VolToPart[4] = {EMMC_PDRIVE, 1}  →  SD2 设备 partition 1
+```
+
+### 多分区访问的限制
+
+当前 `FF_VOLUME_STRS` 中只有一个 `"SD2"` 条目（index 4），因此：
+- `/SD2:` 和 `/4:` 都映射到 pdrv 4 → partition 1
+- 无法通过 `"SD2"` 字符串访问其他分区
+
+**访问其他分区的方式**：
+- 只能通过 `/+数字` 的方式直接指定 pdrv index
+- 例如 `/5:` 访问 pdrv 5（如果 `FF_VOLUME_STRS` 有第二个 "SD2" 或 `VolToPart[5]` 有定义）
+
+**注意**：`fs_open("SD2:/test.txt")` 与 `disk_access("SD2", sector)` 是两个完全独立的接口：
+- 前者经过 VolToPart[] 映射，访问 partition 1
+- 后者直接访问物理扇区，不经过 VolToPart[]
+
+### 设备树配置
 
 在 board overlay 文件中配置分区信息：
 
