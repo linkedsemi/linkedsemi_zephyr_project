@@ -236,4 +236,4 @@ riscv64-unknown-elf-gdb build/zephyr/zephyr.elf
 1. `TEST_HW_STACK_PROTECTION` 与 Coredump 冲突，不可同时开启
 2. 开启 Coredump 后，线程需预留足够栈空间（异常处理在当前线程栈执行）
 3. FATFS 操作无法访问 Partition 2（coredump 区），只能通过 coredump 接口访问
-4. 分区后 FATFS 必须使用挂载点 `/4:` 访问，不可直接使用 `SD2` 设备名
+4. 分区后 FATFS 须使用挂载点 `/4:` 访问，虽然现在这个分卷的实现，使用 `/SD2:` 仍然是访问到分卷后的 `/4:`， 但是现在访问`/SD2:` 和 没有分卷前的 `/SD2:` 是两个概念，没有分卷前的访问到的是整个emmc，分卷后现在的实现访问到的是emmc中被分卷到的partition 1区域，这部分设计FATFS文件系统的分卷实现。
