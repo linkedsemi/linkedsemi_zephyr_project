@@ -19,6 +19,8 @@
 #define USER_PART_BYTES     (TOTAL_CAPACITY_BYTES - MBR_AREA_BYTES - COREDUMP_PART_BYTES)
 
 &mmc_disk1 {
+
+    disk-name = "SD2";
     /* eMMC partition info - child node of mmc_disk1 (SD2) */
     emmc_parts: emmc-partitions {
         compatible = "linkedsemi,emmc-partitions";

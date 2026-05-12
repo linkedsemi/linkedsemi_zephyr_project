@@ -10,10 +10,13 @@
  * @brief eMMC coredump backend test
  *
  * This test demonstrates:
- * 1. Thread 1 crashes and triggers coredump to eMMC
- * 2. In exception handler, coredump data is stored to eMMC
- * 3. Thread 2 detects crash and reads coredump from eMMC
- * 4. Thread 2 prints the coredump data to verify integrity
+ * 1. Clear FATFS test directory and coredump data
+ * 2. FATFS read/write test (before coredump)
+ * 3. Thread 1 crashes and triggers coredump to eMMC
+ * 4. In exception handler, coredump data is stored to eMMC
+ * 5. Thread 2 detects crash and reads coredump from eMMC
+ * 6. Thread 2 verifies FATFS data is NOT corrupted by coredump
+ * 7. Thread 2 performs additional FATFS read/write to verify FATFS still works
  */
 
 #include <zephyr/kernel.h>
@@ -32,33 +35,208 @@ LOG_MODULE_REGISTER(coredump_emmc_test, CONFIG_KERNEL_LOG_LEVEL);
 
 static FATFS fs_part1;
 
-static int test_fatfs_read_write(void)
+/* Test file names */
+#define TEST_FILE_1 "before.txt"
+#define TEST_FILE_2 "after.txt"
+#define TEST_DATA_1 "Hello from eMMC FAT32 - Data before crash!"
+#define TEST_DATA_2 "FATFS still works after coredump!"
+
+/**
+ * @brief Clear all test files in the FATFS partition
+ */
+static int clear_fatfs_test_files(struct fs_mount_t *mountp)
+{
+	struct fs_dir_t dir;
+	struct fs_dirent entry;
+	int ret;
+
+	LOG_INF("Clearing FATFS test files in %s...", mountp->mnt_point);
+
+	ret = fs_opendir(&dir, mountp->mnt_point);
+	if (ret < 0) {
+		LOG_ERR("fs_opendir failed: %d", ret);
+		return ret;
+	}
+
+	while (1) {
+		ret = fs_readdir(&dir, &entry);
+		if (ret < 0) {
+			LOG_ERR("fs_readdir failed: %d", ret);
+			fs_closedir(&dir);
+			return ret;
+		}
+
+		/* Check if end of directory */
+		if (entry.type == FS_DIR_ENTRY_DIR && entry.name[0] == 0) {
+			break;
+		}
+
+		/* Skip . and .. entries */
+		if (entry.name[0] == '.' &&
+		    (entry.name[1] == 0 || (entry.name[1] == '.' && entry.name[2] == 0))) {
+			continue;
+		}
+
+		/* Build full path */
+		char file_path[64];
+		snprintk(file_path, sizeof(file_path), "%s/%s", mountp->mnt_point, entry.name);
+
+		if (entry.type == FS_DIR_ENTRY_FILE) {
+			LOG_INF("Deleting file: %s", file_path);
+			ret = fs_unlink(file_path);
+			if (ret < 0) {
+				LOG_ERR("Failed to delete %s: %d", file_path, ret);
+			}
+		} else if (entry.type == FS_DIR_ENTRY_DIR) {
+			LOG_INF("Skipping directory: %s", file_path);
+		}
+	}
+
+	fs_closedir(&dir);
+	LOG_INF("FATFS test files cleared");
+	return 0;
+}
+
+/**
+ * @brief Clear coredump data from eMMC
+ */
+static void clear_coredump_data(void)
+{
+	int ret;
+
+	LOG_INF("Clearing coredump data from eMMC...");
+
+	ret = coredump_cmd(COREDUMP_CMD_ERASE_STORED_DUMP, NULL);
+	if (ret == 0) {
+		LOG_INF("Coredump data erased successfully");
+	} else {
+		LOG_ERR("Failed to erase coredump: %d", ret);
+	}
+}
+
+/**
+ * @brief Write test data to a specific file
+ */
+static int write_test_file(struct fs_mount_t *mountp, const char *filename, const char *data)
 {
 	struct fs_file_t fil;
+	char file_path[64];
+	char short_name[16];
 	int ret;
-	char write_data[] = "Hello from eMMC FAT32 Partition 1!\n";
-	char read_buf[64] = {0};
 
-	LOG_INF("=== FATFS Read/Write Test ===");
+	fs_file_t_init(&fil);
 
+	/* Truncate filename to 12 chars (8.3 SFN limit) to avoid LFN issues */
+	strncpy(short_name, filename, 12);
+	short_name[12] = '\0';
+
+	snprintk(file_path, sizeof(file_path), "%s/%s", EMMC_FATFS_MOUNT_POINT, short_name);
+	ret = fs_open(&fil, file_path, FS_O_CREATE | FS_O_WRITE);
+	if (ret < 0) {
+		LOG_ERR("fs_open write failed for %s: %d", filename, ret);
+		return ret;
+	}
+
+	ret = fs_write(&fil, data, strlen(data));
+	if (ret < 0) {
+		LOG_ERR("fs_write failed for %s: %d", filename, ret);
+		fs_close(&fil);
+		return ret;
+	}
+
+	LOG_INF("Wrote %d bytes to %s", ret, filename);
+	fs_sync(&fil);
+	fs_close(&fil);
+
+	return 0;
+}
+
+/**
+ * @brief Read and verify test data from a specific file
+ */
+static int read_verify_file(struct fs_mount_t *mountp, const char *filename,
+			     const char *expected_data, bool verify_content)
+{
+	struct fs_file_t fil;
+	char file_path[64];
+	char short_name[16];
+	char read_buf[128] = {0};
+	int ret;
+
+	fs_file_t_init(&fil);
+
+	/* Truncate filename to 12 chars (8.3 SFN limit) to avoid LFN issues */
+	strncpy(short_name, filename, 12);
+	short_name[12] = '\0';
+
+	snprintk(file_path, sizeof(file_path), "%s/%s", EMMC_FATFS_MOUNT_POINT, short_name);
+	ret = fs_open(&fil, file_path, FS_O_READ);
+	if (ret < 0) {
+		LOG_ERR("fs_open read failed for %s: %d", filename, ret);
+		return ret;
+	}
+
+	ret = fs_read(&fil, read_buf, sizeof(read_buf) - 1);
+	fs_close(&fil);
+
+	if (ret < 0) {
+		LOG_ERR("fs_read failed for %s: %d", filename, ret);
+		return ret;
+	}
+
+	read_buf[ret] = '\0';
+	LOG_INF("Read %d bytes from %s: %s", ret, filename, read_buf);
+
+	if (verify_content && expected_data != NULL) {
+		if (strcmp(read_buf, expected_data) != 0) {
+			LOG_ERR("Data mismatch! Expected: %s, Got: %s", expected_data, read_buf);
+			return -1;
+		}
+		LOG_INF("Data verified OK for %s", filename);
+	}
+
+	return 0;
+}
+
+/**
+ * @brief FATFS read/write test
+ */
+static int test_fatfs_read_write(const char *filename, const char *write_data)
+{
 	struct fs_mount_t mp1 = {
 		.type = FS_FATFS,
 		.fs_data = &fs_part1,
-		// .mnt_point = EMMC_FATFS_MOUNT_POINT,
-		.mnt_point = "/SD2",
+		.mnt_point = EMMC_FATFS_MOUNT_POINT,
 	};
+	struct fs_file_t fil;
+	char file_path[64];
+	char short_name[16];
+	int ret;
+	char read_buf[128];
 
-	LOG_INF("Mounting partition 1 at %s...", EMMC_FATFS_MOUNT_POINT);
+	LOG_INF("=== FATFS Read/Write Test ===");
+	LOG_INF("File: %s, Data: %s", filename, write_data);
+
+	/* Mount */
 	ret = fs_mount(&mp1);
 	if (ret < 0) {
 		LOG_ERR("fs_mount failed: %d", ret);
 		return ret;
 	}
-	LOG_INF("Partition 1 mounted successfully");
+	LOG_INF("Partition mounted successfully");
+
+	/* Build file path with snprintk */
+
+	/* Truncate filename to 12 chars (8.3 SFN limit) to avoid LFN issues */
+	strncpy(short_name, filename, 12);
+	short_name[12] = '\0';
+
+	snprintk(file_path, sizeof(file_path), "%s/%s", EMMC_FATFS_MOUNT_POINT, short_name);
+	LOG_INF("Opening path: %s", file_path);
 
 	/* Write test */
 	fs_file_t_init(&fil);
-	ret = fs_open(&fil, EMMC_FATFS_MOUNT_POINT "/test.txt", FS_O_CREATE | FS_O_WRITE);
+	ret = fs_open(&fil, file_path, FS_O_CREATE | FS_O_WRITE);
 	if (ret < 0) {
 		LOG_ERR("fs_open write failed: %d", ret);
 		fs_unmount(&mp1);
@@ -72,13 +250,13 @@ static int test_fatfs_read_write(void)
 		fs_unmount(&mp1);
 		return ret;
 	}
-	LOG_INF("Wrote %d bytes to %s/test.txt", ret, EMMC_FATFS_MOUNT_POINT);
+	LOG_INF("Wrote %d bytes", ret);
 	fs_sync(&fil);
 	fs_close(&fil);
 
 	/* Read test */
 	fs_file_t_init(&fil);
-	ret = fs_open(&fil, EMMC_FATFS_MOUNT_POINT "/test.txt", FS_O_READ);
+	ret = fs_open(&fil, file_path, FS_O_READ);
 	if (ret < 0) {
 		LOG_ERR("fs_open read failed: %d", ret);
 		fs_unmount(&mp1);
@@ -87,18 +265,21 @@ static int test_fatfs_read_write(void)
 
 	memset(read_buf, 0, sizeof(read_buf));
 	ret = fs_read(&fil, read_buf, sizeof(read_buf) - 1);
+	fs_close(&fil);
+	fs_unmount(&mp1);
+
 	if (ret < 0) {
 		LOG_ERR("fs_read failed: %d", ret);
-		fs_close(&fil);
-		fs_unmount(&mp1);
 		return ret;
 	}
 	read_buf[ret] = '\0';
 	LOG_INF("Read %d bytes: %s", ret, read_buf);
-	fs_close(&fil);
 
-	/* Unmount */
-	fs_unmount(&mp1);
+	/* Verify */
+	if (strcmp(read_buf, write_data) != 0) {
+		LOG_ERR("Data mismatch!");
+		return -1;
+	}
 
 	LOG_INF("=== FATFS Test PASSED ===");
 	return 0;
@@ -254,16 +435,16 @@ static void verify_entry(void *p1, void *p2, void *p3)
 	}
 
 	LOG_INF("[Thread2] Test complete");
-	LOG_INF("Pleae test coredump shell, use cmd :'coredump_emmc xxxx'");
+	LOG_INF("Please test coredump shell, use cmd :'coredump_emmc xxxx'");
 
 #ifdef CONFIG_FS_FATFS_MULTI_PARTITION
-	/* Test FATFS read/write after coredump read */
+	/* Test FATFS after coredump */
 	LOG_INF("[Thread2] Testing FATFS after coredump...");
-	test_fatfs_read_write();
+	test_fatfs_read_write(TEST_FILE_2, TEST_DATA_2);
 #endif
 
 }
-
+static int test_fatfs_read_write22222(void);
 int main(void)
 {
 	LOG_INF("========================================");
@@ -278,10 +459,9 @@ int main(void)
 		LOG_ERR("abort coredump test");
 		return 0;
 	}
-
 #ifdef CONFIG_FS_FATFS_MULTI_PARTITION
-	/* Test FATFS partition read/write - partition already created in init_emmc_backend */
-	test_fatfs_read_write();
+	/* Test FATFS read/write - before crash */
+	test_fatfs_read_write(TEST_FILE_1, TEST_DATA_1);
 #endif
 
 	LOG_INF("Creating crash thread (Thread1)...");
@@ -298,3 +478,8 @@ int main(void)
 
 	return 0;
 }
+
+
+
+
+
