@@ -1,8 +1,16 @@
-// template:
+// template 1: r/w/x:
 //     a_iopmp1_partition: iopmp1_partitions@1000000 {
 //         label = "a_iopmp1_partition";
 //               /* addr    size_high_32bit  size_low_32bit */
 //         reg = <0x1000000 0x0000000        DT_SIZE_K(64)>;
+//         attr = <(PMP_R | PMP_W| PMP_X)>;
+//     };
+//
+// template 2: no permission:
+//     b_iopmp1_partition: iopmp1_partitions@100c0000 {
+//         label = "b_iopmp1_partition";
+//               /* addr    size_high_32bit  size_low_32bit */
+//         reg = <(0x10000000 + DT_SIZE_K(768)) 0x0 DT_SIZE_K(512)>;
 //         attr = <0>;
 //     };
 
