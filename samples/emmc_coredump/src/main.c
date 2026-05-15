@@ -453,7 +453,7 @@ int main(void)
 	LOG_INF("Board: %s", CONFIG_BOARD);
 
 	/* Initialize eMMC backend if enabled */
-	if (init_emmc_backend() != 0) {
+	if (init_coredump_emmc_backend() != 0) {
 		LOG_ERR("Failed to initialize eMMC backend");
 		LOG_ERR("Please ensure CONFIG_DEBUG_COREDUMP_EMMC=y in prj.conf");
 		LOG_ERR("abort coredump test");

@@ -13,10 +13,10 @@
  *   Sector 2048+:     User partition (FAT32)
  *   Sector N+:        Coredump partition (10 MB)
  */
-#define MBR_AREA_BYTES      0x100000                      /* 1 MB: MBR + reserved */
-#define COREDUMP_PART_BYTES 0xA00000                      /* 10 MB */
-#define TOTAL_CAPACITY_BYTES (15269888 * 512)             /* 7.28 GiB */
-#define USER_PART_BYTES     (TOTAL_CAPACITY_BYTES - MBR_AREA_BYTES - COREDUMP_PART_BYTES)
+#define TOTAL_SECTORS       15269888                      /* 7.28 GiB */
+#define MBR_AREA_SECTORS    2048                          /* 1 MB: MBR + reserved */
+#define COREDUMP_SECTORS    20480                         /* 10 MB */
+#define USER_PART_SECTORS   (TOTAL_SECTORS - MBR_AREA_SECTORS - COREDUMP_SECTORS)
 
 &mmc_disk1 {
 
@@ -25,13 +25,13 @@
     emmc_parts: emmc-partitions {
         compatible = "linkedsemi,emmc-partitions";
 
-        /* MBR/Management area size */
-        mbr-area-size = <MBR_AREA_BYTES>;
+        /* MBR/Management area size in sectors */
+        mbr-area-size = <MBR_AREA_SECTORS>;
 
-        /* User partition (FAT32) size */
-        user-partition-size = <(USER_PART_BYTES / 512)>;
+        /* User partition (FAT32) size in sectors */
+        user-partition-size = <USER_PART_SECTORS>;
 
-        /* Coredump partition size */
-        coredump-partition-size = <(COREDUMP_PART_BYTES / 512)>;
+        /* Coredump partition size in sectors */
+        coredump-partition-size = <COREDUMP_SECTORS>;
     };
 };
