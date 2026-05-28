@@ -3,11 +3,14 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-
+/*
+* hash_update 只喂原始数据
+* hash_compute 喂最后的原始数据 + padding + 读结果 , 因为有喂数据的操作，所以此接口可以单独使用。
+*/
 #include <zephyr/crypto/crypto.h>
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
-
+#define SHA256_BLOCK_BYTE_SIZE 64
 #define LOG_LEVEL CONFIG_SHA256_LOG_LEVEL
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(main);
@@ -51,7 +54,7 @@ static void sha224_test(const struct device *device)
 	struct hash_ctx ctx;
 	struct hash_pkt pkt = {
 		.in_buf = msg,
-		.in_len = sizeof(msg),
+		.in_len = sizeof(msg)/SHA256_BLOCK_BYTE_SIZE*SHA256_BLOCK_BYTE_SIZE,
 		.out_buf = result,
 	};
 
@@ -60,7 +63,9 @@ static void sha224_test(const struct device *device)
 		LOG_ERR("Failed to init sha256 session\n");
 		return;
 	}
-	
+	hash_update(&ctx, &pkt);
+	pkt.in_buf = msg + SHA256_BLOCK_BYTE_SIZE;
+	pkt.in_len = sizeof(msg) - SHA256_BLOCK_BYTE_SIZE;
 	hash_compute(&ctx, &pkt);
 
 	LOG_INF("SHA224 calculate finish, hash result: ");
@@ -72,7 +77,7 @@ static void sha256_test(const struct device *device)
 	struct hash_ctx ctx;
 	struct hash_pkt pkt = {
 		.in_buf = msg,
-		.in_len = sizeof(msg),
+		.in_len = sizeof(msg)/SHA256_BLOCK_BYTE_SIZE*SHA256_BLOCK_BYTE_SIZE,
 		.out_buf = result,
 	};
 
@@ -81,7 +86,9 @@ static void sha256_test(const struct device *device)
 		LOG_ERR("Failed to init sha256 session\n");
 		return;
 	}
-	
+	hash_update(&ctx, &pkt);
+	pkt.in_buf = msg + SHA256_BLOCK_BYTE_SIZE;
+	pkt.in_len = sizeof(msg) - SHA256_BLOCK_BYTE_SIZE;
 	hash_compute(&ctx, &pkt);
 
 	LOG_INF("SHA256 calculate finish, hash result: ");
@@ -93,7 +100,7 @@ static void sm3_test(const struct device *device)
 	struct hash_ctx ctx;
 	struct hash_pkt pkt = {
 		.in_buf = msg,
-		.in_len = sizeof(msg),
+		.in_len = sizeof(msg)/SHA256_BLOCK_BYTE_SIZE*SHA256_BLOCK_BYTE_SIZE,
 		.out_buf = result,
 	};
 
@@ -102,7 +109,9 @@ static void sm3_test(const struct device *device)
 		LOG_ERR("Failed to init sha256 session\n");
 		return;
 	}
-	
+	hash_update(&ctx, &pkt);
+	pkt.in_buf = msg + SHA256_BLOCK_BYTE_SIZE;
+	pkt.in_len = sizeof(msg) - SHA256_BLOCK_BYTE_SIZE;
 	hash_compute(&ctx, &pkt);
 
 	LOG_INF("SM3 calculate finish, hash result: ");
