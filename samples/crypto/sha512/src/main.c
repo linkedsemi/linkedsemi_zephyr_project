@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+ /*
+ * hash_update 喂数据，更新中间状态 (可调用 0 次或多次)
+ * hash_compute 喂数据 + padding + 输出摘要 (最后调用 1 次，必须调用)
+ */
+
 #include <zephyr/crypto/crypto.h>
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
