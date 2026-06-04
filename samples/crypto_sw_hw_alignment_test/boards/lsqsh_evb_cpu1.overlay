@@ -1,3 +1,8 @@
 &dmac2 {
     status = "okay";
 };
+
+// 如果CONFIG_MBEDTLS_SHA384_SHA512_LINKEDSEMI_HARDWARE_ALT=y,那么 sha512 status必须为“disable”
+&sha512 {
+    status = "disabled";
+};

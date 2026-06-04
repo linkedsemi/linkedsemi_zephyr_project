@@ -15,7 +15,12 @@
 #include <wolfssl/wolfcrypt/types.h>
 #include "mbedtls/sha256.h"
 #include "mbedtls/sha512.h"
+#include "mbedtls/sha256_alt.h"
 #include "ls_hal_otbn_sha.h"
+
+#include <zephyr/crypto/crypto.h>
+#define hw_mbedtls 1
+#define hw_zephyr 0
 
 static int devId = INVALID_DEVID;
 typedef struct testVector {
@@ -607,10 +612,65 @@ int hw_sha512_test(mbedtls_sha512_context *sha, const unsigned char *plaintext, 
     return 0;
 }
 
+#if hw_zephyr
+int hw_zephyr_sha512_test(const unsigned char *plaintext, size_t plaintext_len)
+{
+    const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(sha512));
+    struct hash_ctx ctx;
+    struct hash_pkt pkt;
+    const unsigned char *in_buf = NULL;
+    size_t in_len;
+    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
+
+    ctx.flags = CAP_SYNC_OPS | CAP_SEPARATE_IO_BUFS;
+    if (hash_begin_session(dev, &ctx, CRYPTO_HASH_ALGO_SHA512)) {
+        printk("Failed to init sha512 session");
+        return -1;
+    }
+
+    for (int i = 0; i <= trans_count; i++) {
+        if (trans_count == 0) {
+            in_buf = plaintext;
+            in_len = plaintext_len;
+        } else if (i == trans_count) {
+            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
+            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
+        } else {
+            in_buf = plaintext + TEST_STEP_SIZE * i;
+            in_len = TEST_STEP_SIZE;
+        }
+
+        if (in_len == 0) {
+            continue;
+        }
+
+        pkt.in_buf = (uint8_t *)in_buf;
+        pkt.in_len = in_len;
+        pkt.out_buf = hw_hash512_result;
+
+        if (hash_update(&ctx, &pkt)) {
+            printk("SHA512 UPDATE ERROR at step %d", i);
+            __ASSERT_NO_MSG(0);
+        }
+    }
+
+    pkt.in_buf = NULL;
+    pkt.in_len = 0;
+    pkt.out_buf = hw_hash512_result;
+
+    if (hash_compute(&ctx, &pkt)) {
+        printk("SHA512 CALC ERROR");
+        __ASSERT_NO_MSG(0);
+    }
+
+    hash_free_session(dev, &ctx);
+    return 0;
+}
+#endif
+
 int sha512_test(void)
 {
     wc_Sha512 sw_sha;
-    mbedtls_sha512_context hw_sha;
 
     for(uint32_t test_plaintext_len = 0; test_plaintext_len <= TEST_TOTAL_SIZE; test_plaintext_len++)
     {
@@ -627,9 +687,15 @@ int sha512_test(void)
 
         sw_sha512_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
 
+    #if hw_mbedtls
+        mbedtls_sha512_context hw_sha;
         mbedtls_sha512_init(&hw_sha);
-
         hw_sha512_test(&hw_sha, (char*)sha_plaintext_buf, (size_t)test_plaintext_len);
+    #endif
+
+    #if hw_zephyr
+        hw_zephyr_sha512_test((char*)sha_plaintext_buf, (size_t)test_plaintext_len);
+    #endif
 
         printk("sw out result: ");
         print_hex(sw_hash512_result, WC_SHA512_DIGEST_SIZE);
