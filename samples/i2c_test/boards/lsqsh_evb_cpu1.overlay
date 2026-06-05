@@ -1,11 +1,8 @@
-
-/ {
-    aliases {
-        testi2c1 = &i2c5;
-        testi2c2 = &i2c6;
-        testeeprom1 = &emul_eeprom5_1;
-        testeeprom2 = &emul_eeprom6_1;
-    };
+&aliases {
+    testi2c1 = &i2c5;
+    testi2c2 = &i2c6;
+    testeeprom1 = &emul_eeprom5_1;
+    testeeprom2 = &emul_eeprom6_1;
 };
 
 &i2c5 {

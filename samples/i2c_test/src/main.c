@@ -9,15 +9,16 @@
 #include <stdio.h>
 #include "ls_soc_gpio.h"
 #define BUF_SIZE 1024
+#define START_ADDR 4
 uint8_t wdata_buf[BUF_SIZE];
 uint8_t rdata_buf[BUF_SIZE];
 static void write_read_compare(const struct device *const i2c,uint16_t dev_addr,const uint8_t *wdata,uint8_t *rdata,uint16_t len)
 {
-	i2c_burst_write(i2c,dev_addr,0,wdata,len);
+	i2c_burst_write(i2c,dev_addr,START_ADDR,wdata,len);
 #if 0
 	io_toggle_pin(PA02);
 #endif
-	i2c_burst_read(i2c,dev_addr,0,rdata,len);
+	i2c_burst_read(i2c,dev_addr,START_ADDR,rdata,len);
 	if(memcmp(wdata,rdata,len))
 	{
 		printf("len: %d\n", len);
