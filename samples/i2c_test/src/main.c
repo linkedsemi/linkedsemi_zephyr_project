@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "ls_soc_gpio.h"
-#define BUF_SIZE 256
+#define BUF_SIZE 1024
 uint8_t wdata_buf[BUF_SIZE];
 uint8_t rdata_buf[BUF_SIZE];
 static void write_read_compare(const struct device *const i2c,uint16_t dev_addr,const uint8_t *wdata,uint8_t *rdata,uint16_t len)
@@ -36,7 +36,7 @@ static void write_read_compare(const struct device *const i2c,uint16_t dev_addr,
 		printf("\n\n");
 		__ASSERT(0,"wdata rdata not match\n");
 	}
-#if 0
+#if 1
 	else
 	{
 		printf("len: %d\n", len);
@@ -68,11 +68,7 @@ int main(void)
 	static const struct device *eeprom2 = DEVICE_DT_GET(DT_ALIAS(testeeprom2));
 	static const uint16_t dev_addr1 = DT_REG_ADDR(DT_ALIAS(testeeprom1));
 	static const uint16_t dev_addr2 = DT_REG_ADDR(DT_ALIAS(testeeprom2));
-	static const uint16_t dev_addr = dev_addr1;
 
-	if (dev_addr1 != dev_addr2) {
-		__ASSERT(0,"addr1 should equal to addr2\n");
-	}
 	if (!device_is_ready(i2c1)) {
 		__ASSERT(0,"I2C device is not ready\n");
 	}
@@ -109,13 +105,13 @@ int main(void)
 	io_cfg_output(PA02);
 #endif
 
-	while(1)
+	// while(1)
 	{
 		for(uint16_t len = 1;len<=BUF_SIZE;len++)
 		{
 			gen_rand_data(wdata_buf,len);
-			write_read_compare(i2c2,dev_addr,wdata_buf,rdata_buf,len);
-			write_read_compare(i2c1,dev_addr,wdata_buf,rdata_buf,len);
+			write_read_compare(i2c2,dev_addr1,wdata_buf,rdata_buf,len);
+			write_read_compare(i2c1,dev_addr2,wdata_buf,rdata_buf,len);
 		}
 	}
 
