@@ -5,6 +5,8 @@ manifest:
       url-base: https://github.com/linkedsemi
     - name: ls_sw
       url-base: http://10.10.20.8:8000/sw
+    - name: upstream
+      url-base: https://github.com/zephyrproject-rtos
   projects:
     - name: zephyr
       remote: linkedsemi
@@ -44,3 +46,7 @@ manifest:
       revision: master
       remote: ls_sw
       path: modules/jtag_asd
+    - name: libmctp
+      revision: 782a9da666b6e7703b28dee65499a8f1f456f2b5
+      remote: upstream
+      path: modules/lib/libmctp
