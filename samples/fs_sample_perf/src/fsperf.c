@@ -105,7 +105,7 @@ static int cmd_perf_write(const struct shell *sh, size_t argc, char **argv)
 
 	total_bytes = size_kb * 1024;
 
-	buf = k_aligned_alloc(PERF_BUF_ALIGN, buf_size);
+	buf = (uint8_t *)aligned_alloc(PERF_BUF_ALIGN, buf_size);
 	if (!buf) {
 		shell_error(sh, "Failed to allocate %u bytes (align=%u)",
 			    buf_size, PERF_BUF_ALIGN);
@@ -135,7 +135,7 @@ static int cmd_perf_write(const struct shell *sh, size_t argc, char **argv)
 		err = fs_open(&file, argv[1], FS_O_CREATE | FS_O_WRITE);
 		if (err) {
 			shell_error(sh, "Failed to open %s (%d)", argv[1], err);
-			k_free(buf);
+			free(buf);
 			return -ENOEXEC;
 		}
 
@@ -148,7 +148,7 @@ static int cmd_perf_write(const struct shell *sh, size_t argc, char **argv)
 				shell_error(sh, "Write failed at offset %u (%d)",
 					    total_bytes - remaining, err);
 				fs_close(&file);
-				k_free(buf);
+				free(buf);
 				return -ENOEXEC;
 			}
 			remaining -= err;
@@ -164,7 +164,7 @@ static int cmd_perf_write(const struct shell *sh, size_t argc, char **argv)
 	print_speed(sh, total_time, repeat, (double)total_bytes * repeat);
 	shell_print(sh, "=============================");
 
-	k_free(buf);
+	free(buf);
 	return 0;
 }
 
@@ -217,7 +217,7 @@ static int cmd_perf_read(const struct shell *sh, size_t argc, char **argv)
 
 	file_size = dirent.size;
 
-	buf = k_aligned_alloc(PERF_BUF_ALIGN, buf_size);
+	buf = (uint8_t *)aligned_alloc(PERF_BUF_ALIGN, buf_size);
 	if (!buf) {
 		shell_error(sh, "Failed to allocate %u bytes (align=%u)",
 			    buf_size, PERF_BUF_ALIGN);
@@ -243,7 +243,7 @@ static int cmd_perf_read(const struct shell *sh, size_t argc, char **argv)
 		err = fs_open(&file, argv[1], FS_O_READ);
 		if (err) {
 			shell_error(sh, "Failed to open %s (%d)", argv[1], err);
-			k_free(buf);
+			free(buf);
 			return -ENOEXEC;
 		}
 
@@ -252,7 +252,7 @@ static int cmd_perf_read(const struct shell *sh, size_t argc, char **argv)
 			if (err < 0) {
 				shell_error(sh, "Read failed (%d)", err);
 				fs_close(&file);
-				k_free(buf);
+				free(buf);
 				return -ENOEXEC;
 			}
 
@@ -269,7 +269,7 @@ static int cmd_perf_read(const struct shell *sh, size_t argc, char **argv)
 		if (total_read != file_size) {
 			shell_error(sh, "Short read: expected %u, got %u",
 				    file_size, total_read);
-			k_free(buf);
+			free(buf);
 			return -EIO;
 		}
 
@@ -281,7 +281,7 @@ static int cmd_perf_read(const struct shell *sh, size_t argc, char **argv)
 	print_speed(sh, total_time, repeat, (double)file_size * repeat);
 	shell_print(sh, "=============================");
 
-	k_free(buf);
+	free(buf);
 	return 0;
 }
 
