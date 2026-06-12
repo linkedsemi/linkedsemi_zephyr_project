@@ -40,41 +40,8 @@ static int enable_usb_device_next(void)
 }
 #endif /* CONFIG_USB_DEVICE_STACK_NEXT */
 
-// #include "csi_rv32_gcc.h"
-// #include "core_rv_pmu.h"
-// #include "perf_event_list.h"
-__no_optimization
 int main(void)
 {
-	// printf("malloc start\n");
-	// void *p = malloc(1024);
-	// if (p == NULL) {
-	// 	printf("malloc error\n");
-	// 	return -1;
-	// } else {
-	// 	printf("malloc success\n");
-	// 	printf("p: %p\n", p);
-	// }
-	// free(p);
-
-	// int hw_id = 3;
-	// int event_code = PERF_HARDWARE_CACHE_L1I_RD_ACCESS;
-	// __set_MCYCLE(0);
-	// csi_pmu_hpmcounter_disable(hw_id);
-	// csi_pmu_hpmcounter_disable_interrupt(hw_id);
-	// csi_pmu_hpmcounter_write_value(hw_id, 0);
-	// csi_pmu_hpmcounter_write_event(hw_id, event_code);
-	// csi_pmu_hpmcounter_enable(hw_id);
-
-	// hw_id = 4;
-	// event_code = PERF_HARDWARE_CACHE_L1I_RD_MISS;
-	// csi_pmu_hpmcounter_disable(hw_id);
-	// csi_pmu_hpmcounter_disable_interrupt(hw_id);
-	// csi_pmu_hpmcounter_write_value(hw_id, 0);
-	// csi_pmu_hpmcounter_write_event(hw_id, event_code);
-	// csi_pmu_hpmcounter_enable(hw_id);
-
-    // __set_MCOUNTEREN(0xffffffff);
 
 #if defined(CONFIG_USB_DEVICE_STACK)
 	int ret;
