@@ -1,0 +1,7 @@
+&sha512 {
+    status = "okay";
+};
+
+&sha256 {
+    status = "okay";
+};

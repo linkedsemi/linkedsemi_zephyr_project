@@ -1,29 +1,26 @@
-
-/ {
-    aliases {
-        testi2c1 = &i2c1;
-        testi2c2 = &i2c2;
-        testeeprom1 = &eeprom1_1;
-        testeeprom2 = &eeprom2_1;
-    };
+&aliases {
+    testi2c1 = &i2c5;
+    testi2c2 = &i2c6;
+    testeeprom1 = &emul_eeprom5_1;
+    testeeprom2 = &emul_eeprom6_1;
 };
 
-&i2c1 {
+&i2c5 {
     status = "okay";
 
-    eeprom1_1: eeprom@50 {
+    emul_eeprom5_1: eeprom@55 {
         compatible = "zephyr,i2c-target-eeprom";
-        reg = <0x50>;
+        reg = <0x55>;
         size = <256>;
     };
 };
 
-&i2c2 {
+&i2c6 {
     status = "okay";
 
-    eeprom2_1: eeprom@50 {
+    emul_eeprom6_1: eeprom@66 {
         compatible = "zephyr,i2c-target-eeprom";
-        reg = <0x50>;
+        reg = <0x66>;
         size = <256>;
     };
 };
