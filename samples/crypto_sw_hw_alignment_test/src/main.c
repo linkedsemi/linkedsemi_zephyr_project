@@ -1452,33 +1452,33 @@ int main(void)
     int skips = 0;
     int64_t start_ms = k_uptime_get();
 
-    //printk("OTBN hash alignment test start\n");
+    printk("hash alignment test start\n");
 
 #ifdef CONFIG_WOLFSSL_LINKEDSEMI_OTBN_HASH_ALT
-    //printk("wolfSSL hash path: OTBN hardware\n");
+    printk("wolfSSL hash path: OTBN hardware\n");
 #else
-    //printk("wolfSSL hash path: software\n");
+    printk("wolfSSL hash path: software\n");
 #endif
 
 #ifdef CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT
-    //printk("mbedtls SHA-256/SM3 path: OTBN hardware\n");
+    printk("mbedtls SHA-256/SM3 path: OTBN hardware\n");
 #else
-    //printk("mbedtls SHA-256/SM3 path: software\n");
+    printk("mbedtls SHA-256/SM3 path: software\n");
 #endif
 
 #ifdef CONFIG_MBEDTLS_SHA384_SHA512_LINKEDSEMI_OTBN_ALT
-    //printk("mbedtls SHA-384/SHA-512 path: OTBN hardware\n");
+    printk("mbedtls SHA-384/SHA-512 path: OTBN hardware\n");
 #else
-    //printk("mbedtls SHA-384/SHA-512 path: software\n");
+    printk("mbedtls SHA-384/SHA-512 path: software\n");
 #endif
 
     for (uint32_t i = 0; i < NUM_TEST_LENGTHS; i++) {
         uint32_t len = test_lengths[i];
         if (sha224_test_once(len) != 0) failures++;
         if (sha256_test_once(len) != 0) failures++;
-// #if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
-//         if (sm3_test_once(len) != 0) failures++;
-// #endif
+#if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
+        if (sm3_test_once(len) != 0) failures++;
+#endif
         if (sha384_test_once(len) != 0) failures++;
         if (sha512_test_once(len) != 0) failures++;
     }
@@ -1488,9 +1488,9 @@ int main(void)
 #else
     if (interleaved_sha224_test() != 0) failures++;
     if (interleaved_sha256_test() != 0) failures++;
-// #if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
-//     if (interleaved_sm3_test() != 0) failures++;
-// #endif
+#if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
+    if (interleaved_sm3_test() != 0) failures++;
+#endif
     if (interleaved_sha384_test() != 0) failures++;
     if (interleaved_sha512_test() != 0) failures++;
 #endif
@@ -1509,14 +1509,14 @@ int main(void)
     run_test(cross_algo_256_512_test, &failures, &skips);
     run_test(cross_algo_384_512_test, &failures, &skips);
     run_test(cross_algo_224_512_test, &failures, &skips);
-// #if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
-//     run_test(cross_algo_sm3_256_test, &failures, &skips);
-//     run_test(cross_algo_sm3_512_test, &failures, &skips);
-// #endif
+#if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
+    run_test(cross_algo_sm3_256_test, &failures, &skips);
+    run_test(cross_algo_sm3_512_test, &failures, &skips);
+#endif
 #endif
 
     int64_t elapsed_ms = k_uptime_get() - start_ms;
-    printk("\ntests ended\n");
+    printk("\n---------tests ended---------\n");
 
     if (failures == 0 && skips == 0) {
         printk("All tests passed\n");
