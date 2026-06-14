@@ -65,6 +65,14 @@ extern "C" {
 #define NO_RSA
 #define NO_DH
 
+#undef  HAVE_CURL
+#define HAVE_CURL
+
+/* HAVE_CURL enables EVP code paths that reference OpenSSL NID/SN macros,
+ * so the OpenSSL compatibility layer must also be enabled. */
+#undef  OPENSSL_EXTRA
+#define OPENSSL_EXTRA
+
 #undef  WOLFSSL_SM3
 #define WOLFSSL_SM3
 

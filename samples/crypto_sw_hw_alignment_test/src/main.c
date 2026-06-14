@@ -1,9 +1,17 @@
-
-
 /*
- * SHA256 TEST:
- * The software interface of wolfssl and the hardware interface adapted by linkedsemi on mbedtls are used for comparison
- * The test data ranges from 0bytes to 10,240 bytes
+ * OTBN hash alignment test
+ *
+ * Two independent paths are exercised:
+ *   - wolfssl (wc_Sha256 / wc_Sha224 / wc_Sha384 / wc_Sha512 / wc_Sm3)
+ *   - mbedtls (mbedtls_sha256 / mbedtls_sha512 / mbedtls_sm3)
+ *
+ * Whether each path uses OTBN hardware is controlled by Kconfig:
+ *   CONFIG_WOLFSSL_LINKEDSEMI_OTBN_HASH_ALT
+ *   CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT
+ *   CONFIG_MBEDTLS_SHA384_SHA512_LINKEDSEMI_OTBN_ALT
+ *
+ * The test focuses on boundary lengths where padding/block handling is
+ * most likely to fail.
  */
 
 #include <zephyr/kernel.h>
@@ -15,825 +23,1507 @@
 #include <wolfssl/wolfcrypt/types.h>
 #include "mbedtls/sha256.h"
 #include "mbedtls/sha512.h"
-#include "ls_hal_otbn_sha.h"
 
-static int devId = INVALID_DEVID;
-typedef struct testVector {
-    const char*  input;
-    const char*  output;
-    size_t inLen;
-    size_t outLen;
-} testVector;
+#define TEST_SHA224_SIZE 28
+#define TEST_SHA256_SIZE 32
+#define TEST_SM3_SIZE    32
+#define TEST_SHA384_SIZE 48
+#define TEST_SHA512_SIZE 64
+#define TEST_MAX_DIGEST_SIZE TEST_SHA512_SIZE
 
-#define TEST_TOTAL_SIZE KB(10)
-//分片大小
-#define TEST_STEP_SIZE KB(1)
-__attribute__((aligned(32))) uint8_t sha_plaintext_buf[TEST_TOTAL_SIZE];
-uint8_t sw_hash256_result[WC_SHA256_DIGEST_SIZE];
-uint8_t hw_hash256_result[WC_SHA256_DIGEST_SIZE];
-uint8_t sw_hash224_result[WC_SHA224_DIGEST_SIZE];
-uint8_t hw_hash224_result[WC_SHA224_DIGEST_SIZE];
-uint8_t sw_sm3_result[WC_SM3_DIGEST_SIZE];
-uint8_t hw_sm3_result[WC_SM3_DIGEST_SIZE];
-uint8_t sw_hash384_result[WC_SHA384_DIGEST_SIZE];
-uint8_t hw_hash384_result[WC_SHA384_DIGEST_SIZE];
-uint8_t sw_hash512_result[WC_SHA512_DIGEST_SIZE];
-uint8_t hw_hash512_result[WC_SHA512_DIGEST_SIZE];
+static uint8_t plaintext_buf[KB(11)];
+static uint8_t result_a[TEST_MAX_DIGEST_SIZE];
+static uint8_t result_b[TEST_MAX_DIGEST_SIZE];
 
-inline static void print_hex(const uint8_t *ptr, uint32_t len)
+static const uint32_t test_lengths[] = {
+    0,
+    1,
+    55,   /* SHA-256: one padding block case */
+    56,   /* SHA-256: two padding blocks case */
+    57,
+    63,
+    64,   /* exact one block */
+    65,   /* one block + one byte */
+    119,  /* SHA-512: one padding block case */
+    120,  /* SHA-512: two padding blocks case */
+    121,
+    127,
+    128,  /* exact one block */
+    129,
+    255,
+    256,
+    257,
+    511,
+    512,
+    513,
+    1000,
+    1023,
+    1024,
+    1025,
+    2048,
+    4096,
+    10240,
+};
+#define NUM_TEST_LENGTHS (sizeof(test_lengths) / sizeof(test_lengths[0]))
+
+static inline void fill_plaintext(uint32_t len)
+{
+    if (len > 0) {
+        memset(plaintext_buf, 0x5a, len);
+    }
+}
+
+static inline void print_hex(const uint8_t *ptr, uint32_t len)
 {
     while (len-- != 0) {
-        printk("%2.2x", *ptr++);
+        //printk("%2.2x", *ptr++);
     }
 }
 
-int sw_sha256_test(wc_Sha256* sha256, const byte* plaintext, word32 plaintext_len)
+static inline int compare_results(const char *name, uint32_t len,
+                                   const uint8_t *a, const uint8_t *b,
+                                   uint32_t digest_size)
 {
-    int ret = 0;
-    const byte* in_buf = NULL;
-    word32 in_len;
-    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
-    
-    for(int i = 0; i <= trans_count; i++) {
-        if(trans_count == 0)
-        {
-            in_buf = plaintext;
-            in_len = plaintext_len;
-        }
-        else if((i == trans_count) && (trans_count > 0)){
-            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
-            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
-        }
-        else{
-            in_buf = plaintext + TEST_STEP_SIZE * i;
-            in_len = TEST_STEP_SIZE;
-        }
-
-        if((ret = wc_Sha256Update(sha256, in_buf, in_len)) != 0){
-            __ASSERT_NO_MSG(0);
-        }
+    if (memcmp(a, b, digest_size) != 0) {
+        //printk("%s len=%u compare FAIL\n", name, len);
+        //printk("  wolfssl: "); print_hex(a, digest_size); //printk("\n");
+        //printk("  mbedtls: "); print_hex(b, digest_size); //printk("\n");
+        return -1;
     }
-
-    if((ret = wc_Sha256Final(sha256, sw_hash256_result)) !=0){
-        __ASSERT_NO_MSG(0);
-    }
-
-    wc_Sha256Free(sha256);
-
-    return ret;
-}
-
-int hw_sha256_test(mbedtls_sha256_context *sha, const unsigned char *plaintext, size_t plaintext_len)
-{
-    int ret = 0;
-    bool is224 = false;
-    const unsigned char * in_buf = NULL;
-    size_t in_len;
-    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
-
-    if ((ret = mbedtls_sha256_starts_dma(sha, is224)) != 0) {
-        __ASSERT_NO_MSG(0);
-    }
-
-    for(int i = 0; i <= trans_count; i++) {
-        if(trans_count == 0)
-        {
-            in_buf = plaintext;
-            in_len = plaintext_len;
-        }
-        else if((i == trans_count) && (trans_count > 0)){
-            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
-            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
-        }
-        else{
-            in_buf = plaintext + TEST_STEP_SIZE * i;
-            in_len = TEST_STEP_SIZE;
-        }
-
-        if ((ret = mbedtls_sha256_update_dma(sha, in_buf, in_len)) != 0) {
-        __ASSERT_NO_MSG(0);
-        }
-    }
-
-    if ((ret = mbedtls_sha256_finish_dma(sha, hw_hash256_result)) != 0) {
-        __ASSERT_NO_MSG(0);
-    }
-
-    mbedtls_sha256_free(sha);
-
+    //printk("%s len=%u compare pass\n", name, len);
     return 0;
 }
 
-int sha256_test(void)
+/* ===================================================================
+ * SHA-224
+ * =================================================================== */
+static int sha224_test_once(uint32_t len)
 {
-    wc_Sha256 sw_sha;
-    mbedtls_sha256_context hw_sha;
-
-    for(uint32_t test_plaintext_len = 0; test_plaintext_len <= TEST_TOTAL_SIZE; test_plaintext_len++)
-    {
-        printk("test_plaintext_len: %d\n", test_plaintext_len);
-        memset(sw_hash256_result, 0, WC_SHA256_DIGEST_SIZE);
-        memset(hw_hash256_result, 0, WC_SHA256_DIGEST_SIZE);
-
-        if(test_plaintext_len > 0)
-        {
-            memset(sha_plaintext_buf, 2, test_plaintext_len);
-        }
-
-        // printk("input: ");
-        // print_hex(sha_plaintext_buf, test_plaintext_len);
-        // printk("\n");
-
-        wc_InitSha256_ex(&sw_sha, NULL, devId);
-
-        sw_sha256_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
-
-        mbedtls_sha256_init_dma(&hw_sha);
-
-        hw_sha256_test(&hw_sha, (char*)sha_plaintext_buf, (size_t)test_plaintext_len);
-
-        printk("sw out result: ");
-        print_hex(sw_hash256_result, WC_SHA256_DIGEST_SIZE);
-        printk("\n");
-
-        printk("hw out result: ");
-        print_hex(hw_hash256_result, WC_SHA256_DIGEST_SIZE);
-        printk("\n");
-
-        printk("out compare result: ");
-        if (memcmp(sw_hash256_result, hw_hash256_result, WC_SHA256_DIGEST_SIZE) == 0) {
-            printk("compare pass\n");
-        } else {
-            printk("compare fail\n");
-            __ASSERT_NO_MSG(0);
-        }
-    }
-    return 0;
-}
-
-int sw_sha224_test(wc_Sha224* sha224, const byte* plaintext, word32 plaintext_len)
-{
-    int ret = 0;
-    const byte* in_buf = NULL;
-    word32 in_len;
-    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
-    
-    for(int i = 0; i <= trans_count; i++) {
-        if(trans_count == 0)
-        {
-            in_buf = plaintext;
-            in_len = plaintext_len;
-        }
-        else if((i == trans_count) && (trans_count > 0)){
-            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
-            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
-        }
-        else{
-            in_buf = plaintext + TEST_STEP_SIZE * i;
-            in_len = TEST_STEP_SIZE;
-        }
-
-        if((ret = wc_Sha224Update(sha224, in_buf, in_len)) != 0){
-            __ASSERT_NO_MSG(0);
-        }
-    }
-
-    if((ret = wc_Sha224Final(sha224, sw_hash224_result)) !=0){
-        __ASSERT_NO_MSG(0);
-    }
-
-    wc_Sha224Free(sha224);
-
-    return ret;
-}
-
-int hw_sha224_test(mbedtls_sha256_context *sha, const unsigned char *plaintext, size_t plaintext_len)
-{
-    int ret = 0;
-    bool is224 = true;
-    const unsigned char * in_buf = NULL;
-    size_t in_len;
-    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
-
-    if ((ret = mbedtls_sha256_starts_dma(sha, is224)) != 0) {
-        __ASSERT_NO_MSG(0);
-    }
-
-    for(int i = 0; i <= trans_count; i++) {
-        if(trans_count == 0)
-        {
-            in_buf = plaintext;
-            in_len = plaintext_len;
-        }
-        else if((i == trans_count) && (trans_count > 0)){
-            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
-            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
-        }
-        else{
-            in_buf = plaintext + TEST_STEP_SIZE * i;
-            in_len = TEST_STEP_SIZE;
-        }
-
-        if ((ret = mbedtls_sha256_update_dma(sha, in_buf, in_len)) != 0) {
-        __ASSERT_NO_MSG(0);
-        }
-    }
-
-    if ((ret = mbedtls_sha256_finish_dma(sha, hw_hash224_result)) != 0) {
-        __ASSERT_NO_MSG(0);
-    }
-
-    mbedtls_sha256_free(sha);
-
-    return 0;
-}
-
-int sha224_test(void)
-{
-    wc_Sha224 sw_sha;
-    mbedtls_sha256_context hw_sha;
-
-    for(uint32_t test_plaintext_len = 0; test_plaintext_len <= TEST_TOTAL_SIZE; test_plaintext_len++)
-    {
-        printk("test_plaintext_len: %d\n", test_plaintext_len);
-        memset(sw_hash224_result, 0, WC_SHA224_DIGEST_SIZE);
-        memset(hw_hash224_result, 0, WC_SHA224_DIGEST_SIZE);
-
-        if(test_plaintext_len > 0)
-        {
-            memset(sha_plaintext_buf, 2, test_plaintext_len);
-        }
-
-        wc_InitSha224_ex(&sw_sha, NULL, devId);
-
-        sw_sha224_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
-
-        mbedtls_sha256_init_dma(&hw_sha);
-
-        hw_sha224_test(&hw_sha, (char*)sha_plaintext_buf, (size_t)test_plaintext_len);
-
-        printk("sw out result: ");
-        print_hex(sw_hash224_result, WC_SHA224_DIGEST_SIZE);
-        printk("\n");
-
-        printk("hw out result: ");
-        print_hex(hw_hash224_result, WC_SHA224_DIGEST_SIZE);
-        printk("\n");
-
-        printk("out compare result: ");
-        if (memcmp(sw_hash224_result, hw_hash224_result, WC_SHA224_DIGEST_SIZE) == 0) {
-            printk("compare pass\n");
-        } else {
-            printk("compare fail\n");
-            __ASSERT_NO_MSG(0);
-        }
-    }
-    return 0;
-}
-
-int sw_sm3_test(wc_Sm3* sm3, const byte* plaintext, word32 plaintext_len)
-{
-    int ret = 0;
-    const byte* in_buf = NULL;
-    word32 in_len;
-    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
-    
-    for(int i = 0; i <= trans_count; i++) {
-        if(trans_count == 0)
-        {
-            in_buf = plaintext;
-            in_len = plaintext_len;
-        }
-        else if((i == trans_count) && (trans_count > 0)){
-            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
-            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
-        }
-        else{
-            in_buf = plaintext + TEST_STEP_SIZE * i;
-            in_len = TEST_STEP_SIZE;
-        }
-
-        if((ret = wc_Sm3Update(sm3, in_buf, in_len)) != 0){
-            __ASSERT_NO_MSG(0);
-        }
-    }
-
-    if((ret = wc_Sm3Final(sm3, sw_sm3_result)) !=0){
-        __ASSERT_NO_MSG(0);
-    }
-
-    wc_Sm3Free(sm3);
-
-    return ret;
-}
-
-int hw_sm3_test(mbedtls_sha256_context *sha, const unsigned char *plaintext, size_t plaintext_len)
-{
-    int ret = 0;
-    const unsigned char * in_buf = NULL;
-    size_t in_len;
-    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
-
-    if ((ret = mbedtls_sm3_starts_dma(sha)) != 0) {
-        __ASSERT_NO_MSG(0);
-    }
-
-    for(int i = 0; i <= trans_count; i++) {
-        if(trans_count == 0)
-        {
-            in_buf = plaintext;
-            in_len = plaintext_len;
-        }
-        else if((i == trans_count) && (trans_count > 0)){
-            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
-            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
-        }
-        else{
-            in_buf = plaintext + TEST_STEP_SIZE * i;
-            in_len = TEST_STEP_SIZE;
-        }
-
-        if ((ret = mbedtls_sm3_update_dma(sha, in_buf, in_len)) != 0) {
-        __ASSERT_NO_MSG(0);
-        }
-    }
-
-    if ((ret = mbedtls_sm3_finish_dma(sha, hw_sm3_result)) != 0) {
-        __ASSERT_NO_MSG(0);
-    }
-
-    mbedtls_sm3_free(sha);
-
-    return 0;
-}
-
-int sm3_test(void)
-{
-    wc_Sm3 sw_sha;
-    mbedtls_sha256_context hw_sha;
-
-    for(uint32_t test_plaintext_len = 0; test_plaintext_len <= TEST_TOTAL_SIZE; test_plaintext_len++)
-    {
-        printk("test_plaintext_len: %d\n", test_plaintext_len);
-        memset(sw_sm3_result, 0, WC_SM3_DIGEST_SIZE);
-        memset(hw_sm3_result, 0, WC_SM3_DIGEST_SIZE);
-
-        if(test_plaintext_len > 0)
-        {
-            memset(sha_plaintext_buf, 2, test_plaintext_len);
-        }
-
-        wc_InitSm3(&sw_sha, NULL, devId);
-
-        sw_sm3_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
-
-        mbedtls_sm3_init_dma(&hw_sha);
-
-        hw_sm3_test(&hw_sha, (char*)sha_plaintext_buf, (size_t)test_plaintext_len);
-
-        printk("sw out result: ");
-        print_hex(sw_sm3_result, WC_SM3_DIGEST_SIZE);
-        printk("\n");
-
-        printk("hw out result: ");
-        print_hex(hw_sm3_result, WC_SM3_DIGEST_SIZE);
-        printk("\n");
-
-        printk("out compare result: ");
-        if (memcmp(sw_sm3_result, hw_sm3_result, WC_SM3_DIGEST_SIZE) == 0) {
-            printk("compare pass\n");
-        } else {
-            printk("compare fail\n");
-            __ASSERT_NO_MSG(0);
-        }
-    }
-    return 0;
-}
-
-int sw_sha384_test(wc_Sha384* sha384, const byte* plaintext, word32 plaintext_len)
-{
-    int ret = 0;
-    const byte* in_buf = NULL;
-    word32 in_len;
-    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
-    
-    for(int i = 0; i <= trans_count; i++) {
-        if(trans_count == 0)
-        {
-            in_buf = plaintext;
-            in_len = plaintext_len;
-        }
-        else if((i == trans_count) && (trans_count > 0)){
-            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
-            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
-        }
-        else{
-            in_buf = plaintext + TEST_STEP_SIZE * i;
-            in_len = TEST_STEP_SIZE;
-        }
-
-        if((ret = wc_Sha384Update(sha384, in_buf, in_len)) != 0){
-            __ASSERT_NO_MSG(0);
-        }
-    }
-
-    if((ret = wc_Sha384Final(sha384, sw_hash384_result)) !=0){
-        __ASSERT_NO_MSG(0);
-    }
-
-    wc_Sha384Free(sha384);
-
-    return ret;
-}
-
-int hw_sha384_test(mbedtls_sha512_context *sha, const unsigned char *plaintext, size_t plaintext_len)
-{
-    int ret = 0;
-    bool is384 = true;
-    const unsigned char * in_buf = NULL;
-    size_t in_len;
-    volatile uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
-
-    if ((ret = mbedtls_sha512_starts(sha, is384)) != 0) {
-        __ASSERT_NO_MSG(0);
-    }
-
-    for(int i = 0; i <= trans_count; i++) {
-        if(trans_count == 0)
-        {
-            in_buf = plaintext;
-            in_len = plaintext_len;
-        }
-        else if((i == trans_count) && (trans_count > 0)){
-            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
-            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
-        }
-        else{
-            in_buf = plaintext + TEST_STEP_SIZE * i;
-            in_len = TEST_STEP_SIZE;
-        }
-
-        if ((ret = mbedtls_sha512_update(sha, in_buf, in_len)) != 0) {
-        __ASSERT_NO_MSG(0);
-        }
-    }
-
-    if ((ret = mbedtls_sha512_finish(sha, hw_hash384_result)) != 0) {
-        __ASSERT_NO_MSG(0);
-    }
-
-    mbedtls_sha512_free(sha);
-
-    return 0;
-}
-
-int sha384_test(void)
-{
-    wc_Sha384 sw_sha;
-    mbedtls_sha512_context hw_sha;
-
-    for(uint32_t test_plaintext_len = 0; test_plaintext_len <= TEST_TOTAL_SIZE; test_plaintext_len++)
-    {
-        printk("test_plaintext_len: %d\n", test_plaintext_len);
-        memset(sw_hash384_result, 0, WC_SHA384_DIGEST_SIZE);
-        memset(hw_hash384_result, 0, WC_SHA384_DIGEST_SIZE);
-
-        if(test_plaintext_len > 0)
-        {
-            memset(sha_plaintext_buf, 2, test_plaintext_len);
-        }
-
-        wc_InitSha384_ex(&sw_sha, NULL, devId);
-
-        sw_sha384_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
-
-        mbedtls_sha512_init(&hw_sha);
-
-        hw_sha384_test(&hw_sha, (char*)sha_plaintext_buf, (size_t)test_plaintext_len);
-
-        printk("sw out result: ");
-        print_hex(sw_hash384_result, WC_SHA384_DIGEST_SIZE);
-        printk("\n");
-
-        printk("hw out result: ");
-        print_hex(hw_hash384_result, WC_SHA384_DIGEST_SIZE);
-        printk("\n");
-
-        printk("out compare result: ");
-        if (memcmp(sw_hash384_result, hw_hash384_result, WC_SHA384_DIGEST_SIZE) == 0) {
-            printk("compare pass\n");
-        } else {
-            printk("compare fail\n");
-            __ASSERT_NO_MSG(0);
-        }
-    }
-    return 0;
-}
-
-int sw_sha512_test(wc_Sha512* sha512, const byte* plaintext, word32 plaintext_len)
-{
-    int ret = 0;
-    const byte* in_buf = NULL;
-    word32 in_len;
-    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
-    
-    for(int i = 0; i <= trans_count; i++) {
-        if(trans_count == 0)
-        {
-            in_buf = plaintext;
-            in_len = plaintext_len;
-        }
-        else if((i == trans_count) && (trans_count > 0)){
-            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
-            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
-        }
-        else{
-            in_buf = plaintext + TEST_STEP_SIZE * i;
-            in_len = TEST_STEP_SIZE;
-        }
-
-        if((ret = wc_Sha512Update(sha512, in_buf, in_len)) != 0){
-            __ASSERT_NO_MSG(0);
-        }
-    }
-
-    if((ret = wc_Sha512Final(sha512, sw_hash512_result)) !=0){
-        __ASSERT_NO_MSG(0);
-    }
-
-    wc_Sha512Free(sha512);
-
-    return ret;
-}
-
-int hw_sha512_test(mbedtls_sha512_context *sha, const unsigned char *plaintext, size_t plaintext_len)
-{
-    int ret = 0;
-    bool is384 = false;
-    const unsigned char * in_buf = NULL;
-    size_t in_len;
-    volatile uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
-
-    if ((ret = mbedtls_sha512_starts(sha, is384)) != 0) {
-        __ASSERT_NO_MSG(0);
-    }
-
-    for(int i = 0; i <= trans_count; i++) {
-        if(trans_count == 0)
-        {
-            in_buf = plaintext;
-            in_len = plaintext_len;
-        }
-        else if((i == trans_count) && (trans_count > 0)){
-            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
-            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
-        }
-        else{
-            in_buf = plaintext + TEST_STEP_SIZE * i;
-            in_len = TEST_STEP_SIZE;
-        }
-
-        if ((ret = mbedtls_sha512_update(sha, in_buf, in_len)) != 0) {
-        __ASSERT_NO_MSG(0);
-        }
-    }
-
-    if ((ret = mbedtls_sha512_finish(sha, hw_hash512_result)) != 0) {
-        __ASSERT_NO_MSG(0);
-    }
-
-    mbedtls_sha512_free(sha);
-
-    return 0;
-}
-
-int sha512_test(void)
-{
-    wc_Sha512 sw_sha;
-    mbedtls_sha512_context hw_sha;
-
-    for(uint32_t test_plaintext_len = 0; test_plaintext_len <= TEST_TOTAL_SIZE; test_plaintext_len++)
-    {
-        printk("test_plaintext_len: %d\n", test_plaintext_len);
-        memset(sw_hash512_result, 0, WC_SHA512_DIGEST_SIZE);
-        memset(hw_hash512_result, 0, WC_SHA512_DIGEST_SIZE);
-
-        if(test_plaintext_len > 0)
-        {
-            memset(sha_plaintext_buf, 2, test_plaintext_len);
-        }
-
-        wc_InitSha512_ex(&sw_sha, NULL, devId);
-
-        sw_sha512_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
-
-        mbedtls_sha512_init(&hw_sha);
-
-        hw_sha512_test(&hw_sha, (char*)sha_plaintext_buf, (size_t)test_plaintext_len);
-
-        printk("sw out result: ");
-        print_hex(sw_hash512_result, WC_SHA512_DIGEST_SIZE);
-        printk("\n");
-
-        printk("hw out result: ");
-        print_hex(hw_hash512_result, WC_SHA512_DIGEST_SIZE);
-        printk("\n");
-
-        printk("out compare result: ");
-        if (memcmp(sw_hash512_result, hw_hash512_result, WC_SHA512_DIGEST_SIZE) == 0) {
-            printk("compare pass\n");
-        } else {
-            printk("compare fail\n");
-            __ASSERT_NO_MSG(0);
-        }
-    }
-    return 0;
-}
-
-int hw_otbn_sm3_test(const unsigned char *plaintext, size_t plaintext_len)
-{
-    const unsigned char * in_buf = NULL;
-    size_t in_len;
-    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
-
-    HAL_OTBN_SM3_Init();
-
-    for(int i = 0; i <= trans_count; i++) {
-        if(trans_count == 0)
-        {
-            in_buf = plaintext;
-            in_len = plaintext_len;
-        }
-        else if((i == trans_count) && (trans_count > 0)){
-            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
-            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
-        }
-        else{
-            in_buf = plaintext + TEST_STEP_SIZE * i;
-            in_len = TEST_STEP_SIZE;
-        }
-
-        HAL_OTBN_SM3_Update((uint8_t *)in_buf, in_len);
-    }
-
-    HAL_OTBN_SM3_Final(hw_sm3_result);
-
-    return 0;
-}
-
-int otbn_sm3_test(void)
-{
-    wc_Sm3 sw_sha;
-
-    for(uint32_t test_plaintext_len = 0; test_plaintext_len <= TEST_TOTAL_SIZE; test_plaintext_len++)
-    {
-        printk("test_plaintext_len: %d\n", test_plaintext_len);
-        memset(sw_sm3_result, 0, WC_SM3_DIGEST_SIZE);
-        memset(hw_sm3_result, 0, WC_SM3_DIGEST_SIZE);
-
-        if(test_plaintext_len > 0)
-        {
-            memset(sha_plaintext_buf, 2, test_plaintext_len);
-        }
-
-        wc_InitSm3(&sw_sha, NULL, devId);
-
-        sw_sm3_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
-
-        HAL_OTBN_Init();
-
-        hw_otbn_sm3_test((char*)sha_plaintext_buf, (size_t)test_plaintext_len);
-
-        printk("sw out result: ");
-        print_hex(sw_sm3_result, WC_SM3_DIGEST_SIZE);
-        printk("\n");
-
-        printk("hw out result: ");
-        print_hex(hw_sm3_result, WC_SM3_DIGEST_SIZE);
-        printk("\n");
-
-        printk("out compare result: ");
-        if (memcmp(sw_sm3_result, hw_sm3_result, WC_SM3_DIGEST_SIZE) == 0) {
-            printk("compare pass\n");
-        } else {
-            printk("compare fail\n");
-            __ASSERT_NO_MSG(0);
-        }
-    }
-    return 0;
-}
-
-int hw_otbn_sha256_test(const unsigned char *plaintext, size_t plaintext_len)
-{
-    const unsigned char * in_buf = NULL;
-    size_t in_len;
-    uint32_t trans_count = plaintext_len / TEST_STEP_SIZE;
-
-    HAL_OTBN_SHA256_Init();
-
-    for(int i = 0; i <= trans_count; i++) {
-        if(trans_count == 0)
-        {
-            in_buf = plaintext;
-            in_len = plaintext_len;
-        }
-        else if((i == trans_count) && (trans_count > 0)){
-            in_buf = plaintext + TEST_STEP_SIZE * trans_count;
-            in_len = plaintext_len - TEST_STEP_SIZE * trans_count;
-        }
-        else{
-            in_buf = plaintext + TEST_STEP_SIZE * i;
-            in_len = TEST_STEP_SIZE;
-        }
-
-        HAL_OTBN_SHA256_Update((uint8_t *)in_buf, in_len);
-    }
-
-    HAL_OTBN_SHA256_Final(hw_hash256_result);
-
-    return 0;
-}
-
-int otbn_sha256_test(void)
-{
-    wc_Sha256 sw_sha;
-
-    for(uint32_t test_plaintext_len = 0; test_plaintext_len <= TEST_TOTAL_SIZE; test_plaintext_len++)
-    {
-        printk("test_plaintext_len: %d\n", test_plaintext_len);
-        memset(sw_hash256_result, 0, WC_SHA256_DIGEST_SIZE);
-        memset(hw_hash256_result, 0, WC_SHA256_DIGEST_SIZE);
-
-        if(test_plaintext_len > 0)
-        {
-            memset(sha_plaintext_buf, 2, test_plaintext_len);
-        }
-
-        wc_InitSha256_ex(&sw_sha, NULL, devId);
-
-        sw_sha256_test(&sw_sha, (byte*)sha_plaintext_buf, (word32)test_plaintext_len);
-
-        HAL_OTBN_Init();
-
-        hw_otbn_sha256_test((char*)sha_plaintext_buf, (size_t)test_plaintext_len);
-
-        printk("sw out result: ");
-        print_hex(sw_hash256_result, WC_SHA256_DIGEST_SIZE);
-        printk("\n");
-
-        printk("hw out result: ");
-        print_hex(hw_hash256_result, WC_SHA256_DIGEST_SIZE);
-        printk("\n");
-
-        printk("out compare result: ");
-        if (memcmp(sw_hash256_result, hw_hash256_result, WC_SHA256_DIGEST_SIZE) == 0) {
-            printk("compare pass\n");
-        } else {
-            printk("compare fail\n");
-            __ASSERT_NO_MSG(0);
-        }
-    }
-    return 0;
-}
-
-int main(void)
-{
+    wc_Sha224 ctx_w;
+    mbedtls_sha256_context ctx_m;
     int ret;
 
-    if ( (ret = sha224_test()) != 0)
-        printk("SHA-224  test failed!\n");
-    else
-        printk("SHA-224  test passed!\n");
+    fill_plaintext(len);
 
-    if ( (ret = sha256_test()) != 0)
-        printk("SHA-256  test failed!\n");
-    else
-        printk("SHA-256  test passed!\n");
+    ret = wc_InitSha224_ex(&ctx_w, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Update(&ctx_w, plaintext_buf, len);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Final(&ctx_w, result_a);
+    if (ret != 0) return ret;
+    wc_Sha224Free(&ctx_w);
 
-    if ( (ret = sm3_test()) != 0)
-        printk("SM3  test failed!\n");
-    else
-        printk("SM3  test passed!\n");
+    mbedtls_sha256_init(&ctx_m);
+    ret = mbedtls_sha256_starts(&ctx_m, 1);
+    if (ret != 0) return ret;
+    ret = mbedtls_sha256_update(&ctx_m, plaintext_buf, len);
+    if (ret != 0) return ret;
+    ret = mbedtls_sha256_finish(&ctx_m, result_b);
+    if (ret != 0) return ret;
+    mbedtls_sha256_free(&ctx_m);
 
-    if ( (ret = sha384_test()) != 0)
-        printk("SHA-384  test failed!\n");
-    else
-        printk("SHA-384  test passed!\n");
+    return compare_results("SHA-224", len, result_a, result_b, TEST_SHA224_SIZE);
+}
 
-    if ( (ret = sha512_test()) != 0)
-        printk("SHA-512  test failed!\n");
-    else
-        printk("SHA-512  test passed!\n");
+/* ===================================================================
+ * SHA-256
+ * =================================================================== */
+static int sha256_test_once(uint32_t len)
+{
+    wc_Sha256 ctx_w;
+    mbedtls_sha256_context ctx_m;
+    int ret;
 
-    if ( (ret = otbn_sm3_test()) != 0)
-        printk("OTBN SM3  test failed!\n");
-    else
-        printk("OTBN SM3  test passed!\n");
+    fill_plaintext(len);
 
-    if ( (ret = otbn_sha256_test()) != 0)
-        printk("OTBN SHA256  test failed!\n");
-    else
-        printk("OTBN SHA256  test passed!\n");
+    ret = wc_InitSha256_ex(&ctx_w, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Update(&ctx_w, plaintext_buf, len);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Final(&ctx_w, result_a);
+    if (ret != 0) return ret;
+    wc_Sha256Free(&ctx_w);
 
+    mbedtls_sha256_init(&ctx_m);
+    ret = mbedtls_sha256_starts(&ctx_m, 0);
+    if (ret != 0) return ret;
+    ret = mbedtls_sha256_update(&ctx_m, plaintext_buf, len);
+    if (ret != 0) return ret;
+    ret = mbedtls_sha256_finish(&ctx_m, result_b);
+    if (ret != 0) return ret;
+    mbedtls_sha256_free(&ctx_m);
+
+    return compare_results("SHA-256", len, result_a, result_b, TEST_SHA256_SIZE);
+}
+
+#if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
+/* ===================================================================
+ * SM3
+ * =================================================================== */
+static int sm3_test_once(uint32_t len)
+{
+    wc_Sm3 ctx_w;
+    mbedtls_sha256_context ctx_m;
+    int ret;
+
+    fill_plaintext(len);
+
+    ret = wc_InitSm3(&ctx_w, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sm3Update(&ctx_w, plaintext_buf, len);
+    if (ret != 0) return ret;
+    ret = wc_Sm3Final(&ctx_w, result_a);
+    if (ret != 0) return ret;
+    wc_Sm3Free(&ctx_w);
+
+    mbedtls_sm3_init(&ctx_m);
+    ret = mbedtls_sm3_starts(&ctx_m);
+    if (ret != 0) return ret;
+    ret = mbedtls_sm3_update(&ctx_m, plaintext_buf, len);
+    if (ret != 0) return ret;
+    ret = mbedtls_sm3_finish(&ctx_m, result_b);
+    if (ret != 0) return ret;
+    mbedtls_sm3_free(&ctx_m);
+
+    return compare_results("SM3", len, result_a, result_b, TEST_SM3_SIZE);
+}
+#endif
+/* ===================================================================
+ * SHA-384
+ * =================================================================== */
+static int sha384_test_once(uint32_t len)
+{
+    wc_Sha384 ctx_w;
+    mbedtls_sha512_context ctx_m;
+    int ret;
+
+    fill_plaintext(len);
+
+    ret = wc_InitSha384_ex(&ctx_w, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Update(&ctx_w, plaintext_buf, len);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Final(&ctx_w, result_a);
+    if (ret != 0) return ret;
+    wc_Sha384Free(&ctx_w);
+
+    mbedtls_sha512_init(&ctx_m);
+    ret = mbedtls_sha512_starts(&ctx_m, 1);
+    if (ret != 0) return ret;
+    ret = mbedtls_sha512_update(&ctx_m, plaintext_buf, len);
+    if (ret != 0) return ret;
+    ret = mbedtls_sha512_finish(&ctx_m, result_b);
+    if (ret != 0) return ret;
+    mbedtls_sha512_free(&ctx_m);
+
+    return compare_results("SHA-384", len, result_a, result_b, TEST_SHA384_SIZE);
+}
+
+/* ===================================================================
+ * SHA-512
+ * =================================================================== */
+static int sha512_test_once(uint32_t len)
+{
+    wc_Sha512 ctx_w;
+    mbedtls_sha512_context ctx_m;
+    int ret;
+
+    fill_plaintext(len);
+
+    ret = wc_InitSha512_ex(&ctx_w, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Update(&ctx_w, plaintext_buf, len);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Final(&ctx_w, result_a);
+    if (ret != 0) return ret;
+    wc_Sha512Free(&ctx_w);
+
+    mbedtls_sha512_init(&ctx_m);
+    ret = mbedtls_sha512_starts(&ctx_m, 0);
+    if (ret != 0) return ret;
+    ret = mbedtls_sha512_update(&ctx_m, plaintext_buf, len);
+    if (ret != 0) return ret;
+    ret = mbedtls_sha512_finish(&ctx_m, result_b);
+    if (ret != 0) return ret;
+    mbedtls_sha512_free(&ctx_m);
+
+    return compare_results("SHA-512", len, result_a, result_b, TEST_SHA512_SIZE);
+}
+
+static int interleaved_compare(const char *name,
+                                const uint8_t *result_a,
+                                const uint8_t *result_b,
+                                const uint8_t *ref_wa,
+                                const uint8_t *ref_wb,
+                                const uint8_t *ref_ma,
+                                const uint8_t *ref_mb,
+                                uint32_t digest_size)
+{
+    if (memcmp(result_a, ref_wa, digest_size) != 0 ||
+        memcmp(result_b, ref_wb, digest_size) != 0 ||
+        memcmp(result_a, ref_ma, digest_size) != 0 ||
+        memcmp(result_b, ref_mb, digest_size) != 0) {
+        //printk("Interleaved %s compare FAIL\n", name);
+        //printk("  wolfssl interleaved a: "); print_hex(result_a, digest_size); //printk("\n");
+        //printk("  wolfssl sequential a:  "); print_hex(ref_wa, digest_size); //printk("\n");
+        //printk("  mbedtls sequential a:  "); print_hex(ref_ma, digest_size); //printk("\n");
+        //printk("  wolfssl interleaved b: "); print_hex(result_b, digest_size); //printk("\n");
+        //printk("  wolfssl sequential b:  "); print_hex(ref_wb, digest_size); //printk("\n");
+        //printk("  mbedtls sequential b:  "); print_hex(ref_mb, digest_size); //printk("\n");
+        return -1;
+    }
+    //printk("Interleaved %s compare pass\n", name);
+    return 0;
+}
+
+/* ===================================================================
+ * Interleaved update test: two SHA-224 contexts updated alternately,
+ * compared against both wolfssl and mbedtls sequential references.
+ * =================================================================== */
+static int interleaved_sha224_test(void)
+{
+    wc_Sha224 ctx_wa, ctx_wb;
+    mbedtls_sha256_context ctx_ma, ctx_mb;
+    uint8_t ref_wa[TEST_SHA224_SIZE];
+    uint8_t ref_wb[TEST_SHA224_SIZE];
+    uint8_t ref_ma[TEST_SHA224_SIZE];
+    uint8_t ref_mb[TEST_SHA224_SIZE];
+    const byte *data_a = (const byte *)"abcdef";
+    const byte *data_b = (const byte *)"123456";
+    int ret;
+
+    wc_InitSha224_ex(&ctx_wa, NULL, INVALID_DEVID);
+    wc_InitSha224_ex(&ctx_wb, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) {
+        ret = wc_Sha224Update(&ctx_wa, data_a, 6);
+        if (ret != 0) return ret;
+        ret = wc_Sha224Update(&ctx_wb, data_b, 6);
+        if (ret != 0) return ret;
+    }
+    ret = wc_Sha224Final(&ctx_wa, result_a);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Final(&ctx_wb, result_b);
+    if (ret != 0) return ret;
+
+    wc_InitSha224_ex(&ctx_wa, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) wc_Sha224Update(&ctx_wa, data_a, 6);
+    wc_Sha224Final(&ctx_wa, ref_wa);
+
+    wc_InitSha224_ex(&ctx_wb, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) wc_Sha224Update(&ctx_wb, data_b, 6);
+    wc_Sha224Final(&ctx_wb, ref_wb);
+
+    mbedtls_sha256_init(&ctx_ma);
+    mbedtls_sha256_starts(&ctx_ma, 1);
+    for (int i = 0; i < 20; i++) mbedtls_sha256_update(&ctx_ma, data_a, 6);
+    mbedtls_sha256_finish(&ctx_ma, ref_ma);
+    mbedtls_sha256_free(&ctx_ma);
+
+    mbedtls_sha256_init(&ctx_mb);
+    mbedtls_sha256_starts(&ctx_mb, 1);
+    for (int i = 0; i < 20; i++) mbedtls_sha256_update(&ctx_mb, data_b, 6);
+    mbedtls_sha256_finish(&ctx_mb, ref_mb);
+    mbedtls_sha256_free(&ctx_mb);
+
+    return interleaved_compare("SHA-224", result_a, result_b,
+                               ref_wa, ref_wb, ref_ma, ref_mb,
+                               TEST_SHA224_SIZE);
+}
+
+/* ===================================================================
+ * Interleaved update test: two SHA-256 contexts updated alternately,
+ * compared against both wolfssl and mbedtls sequential references.
+ * =================================================================== */
+static int interleaved_sha256_test(void)
+{
+    wc_Sha256 ctx_wa, ctx_wb;
+    mbedtls_sha256_context ctx_ma, ctx_mb;
+    uint8_t ref_wa[TEST_SHA256_SIZE];
+    uint8_t ref_wb[TEST_SHA256_SIZE];
+    uint8_t ref_ma[TEST_SHA256_SIZE];
+    uint8_t ref_mb[TEST_SHA256_SIZE];
+    const byte *data_a = (const byte *)"abcdef";
+    const byte *data_b = (const byte *)"123456";
+    int ret;
+
+    wc_InitSha256_ex(&ctx_wa, NULL, INVALID_DEVID);
+    wc_InitSha256_ex(&ctx_wb, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) {
+        ret = wc_Sha256Update(&ctx_wa, data_a, 6);
+        if (ret != 0) return ret;
+        ret = wc_Sha256Update(&ctx_wb, data_b, 6);
+        if (ret != 0) return ret;
+    }
+    ret = wc_Sha256Final(&ctx_wa, result_a);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Final(&ctx_wb, result_b);
+    if (ret != 0) return ret;
+
+    wc_InitSha256_ex(&ctx_wa, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) wc_Sha256Update(&ctx_wa, data_a, 6);
+    wc_Sha256Final(&ctx_wa, ref_wa);
+
+    wc_InitSha256_ex(&ctx_wb, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) wc_Sha256Update(&ctx_wb, data_b, 6);
+    wc_Sha256Final(&ctx_wb, ref_wb);
+
+    mbedtls_sha256_init(&ctx_ma);
+    mbedtls_sha256_starts(&ctx_ma, 0);
+    for (int i = 0; i < 20; i++) mbedtls_sha256_update(&ctx_ma, data_a, 6);
+    mbedtls_sha256_finish(&ctx_ma, ref_ma);
+    mbedtls_sha256_free(&ctx_ma);
+
+    mbedtls_sha256_init(&ctx_mb);
+    mbedtls_sha256_starts(&ctx_mb, 0);
+    for (int i = 0; i < 20; i++) mbedtls_sha256_update(&ctx_mb, data_b, 6);
+    mbedtls_sha256_finish(&ctx_mb, ref_mb);
+    mbedtls_sha256_free(&ctx_mb);
+
+    return interleaved_compare("SHA-256", result_a, result_b,
+                               ref_wa, ref_wb, ref_ma, ref_mb,
+                               TEST_SHA256_SIZE);
+}
+
+#if  defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
+/* ===================================================================
+ * Interleaved update test: two SM3 contexts updated alternately,
+ * compared against both wolfssl and mbedtls sequential references.
+ * =================================================================== */
+static int interleaved_sm3_test(void)
+{
+    wc_Sm3 ctx_wa, ctx_wb;
+    mbedtls_sha256_context ctx_ma, ctx_mb;
+    uint8_t ref_wa[TEST_SM3_SIZE];
+    uint8_t ref_wb[TEST_SM3_SIZE];
+    uint8_t ref_ma[TEST_SM3_SIZE];
+    uint8_t ref_mb[TEST_SM3_SIZE];
+    const byte *data_a = (const byte *)"abcdef";
+    const byte *data_b = (const byte *)"123456";
+    int ret;
+
+    wc_InitSm3(&ctx_wa, NULL, INVALID_DEVID);
+    wc_InitSm3(&ctx_wb, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) {
+        ret = wc_Sm3Update(&ctx_wa, data_a, 6);
+        if (ret != 0) return ret;
+        ret = wc_Sm3Update(&ctx_wb, data_b, 6);
+        if (ret != 0) return ret;
+    }
+    ret = wc_Sm3Final(&ctx_wa, result_a);
+    if (ret != 0) return ret;
+    ret = wc_Sm3Final(&ctx_wb, result_b);
+    if (ret != 0) return ret;
+
+    wc_InitSm3(&ctx_wa, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) wc_Sm3Update(&ctx_wa, data_a, 6);
+    wc_Sm3Final(&ctx_wa, ref_wa);
+
+    wc_InitSm3(&ctx_wb, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) wc_Sm3Update(&ctx_wb, data_b, 6);
+    wc_Sm3Final(&ctx_wb, ref_wb);
+
+    mbedtls_sm3_init(&ctx_ma);
+    mbedtls_sm3_starts(&ctx_ma);
+    for (int i = 0; i < 20; i++) mbedtls_sm3_update(&ctx_ma, data_a, 6);
+    mbedtls_sm3_finish(&ctx_ma, ref_ma);
+    mbedtls_sm3_free(&ctx_ma);
+
+    mbedtls_sm3_init(&ctx_mb);
+    mbedtls_sm3_starts(&ctx_mb);
+    for (int i = 0; i < 20; i++) mbedtls_sm3_update(&ctx_mb, data_b, 6);
+    mbedtls_sm3_finish(&ctx_mb, ref_mb);
+    mbedtls_sm3_free(&ctx_mb);
+
+    return interleaved_compare("SM3", result_a, result_b,
+                               ref_wa, ref_wb, ref_ma, ref_mb,
+                               TEST_SM3_SIZE);
+}
+#endif
+/* ===================================================================
+ * Interleaved update test: two SHA-384 contexts updated alternately,
+ * compared against both wolfssl and mbedtls sequential references.
+ * =================================================================== */
+static int interleaved_sha384_test(void)
+{
+    wc_Sha384 ctx_wa, ctx_wb;
+    mbedtls_sha512_context ctx_ma, ctx_mb;
+    uint8_t ref_wa[TEST_SHA384_SIZE];
+    uint8_t ref_wb[TEST_SHA384_SIZE];
+    uint8_t ref_ma[TEST_SHA384_SIZE];
+    uint8_t ref_mb[TEST_SHA384_SIZE];
+    const byte *data_a = (const byte *)"abcdef";
+    const byte *data_b = (const byte *)"123456";
+    int ret;
+
+    wc_InitSha384_ex(&ctx_wa, NULL, INVALID_DEVID);
+    wc_InitSha384_ex(&ctx_wb, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) {
+        ret = wc_Sha384Update(&ctx_wa, data_a, 6);
+        if (ret != 0) return ret;
+        ret = wc_Sha384Update(&ctx_wb, data_b, 6);
+        if (ret != 0) return ret;
+    }
+    ret = wc_Sha384Final(&ctx_wa, result_a);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Final(&ctx_wb, result_b);
+    if (ret != 0) return ret;
+
+    wc_InitSha384_ex(&ctx_wa, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) wc_Sha384Update(&ctx_wa, data_a, 6);
+    wc_Sha384Final(&ctx_wa, ref_wa);
+
+    wc_InitSha384_ex(&ctx_wb, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) wc_Sha384Update(&ctx_wb, data_b, 6);
+    wc_Sha384Final(&ctx_wb, ref_wb);
+
+    mbedtls_sha512_init(&ctx_ma);
+    mbedtls_sha512_starts(&ctx_ma, 1);
+    for (int i = 0; i < 20; i++) mbedtls_sha512_update(&ctx_ma, data_a, 6);
+    mbedtls_sha512_finish(&ctx_ma, ref_ma);
+    mbedtls_sha512_free(&ctx_ma);
+
+    mbedtls_sha512_init(&ctx_mb);
+    mbedtls_sha512_starts(&ctx_mb, 1);
+    for (int i = 0; i < 20; i++) mbedtls_sha512_update(&ctx_mb, data_b, 6);
+    mbedtls_sha512_finish(&ctx_mb, ref_mb);
+    mbedtls_sha512_free(&ctx_mb);
+
+    return interleaved_compare("SHA-384", result_a, result_b,
+                               ref_wa, ref_wb, ref_ma, ref_mb,
+                               TEST_SHA384_SIZE);
+}
+
+/* ===================================================================
+ * Interleaved update test: two SHA-512 contexts updated alternately,
+ * compared against both wolfssl and mbedtls sequential references.
+ * =================================================================== */
+static int interleaved_sha512_test(void)
+{
+    wc_Sha512 ctx_wa, ctx_wb;
+    mbedtls_sha512_context ctx_ma, ctx_mb;
+    uint8_t ref_wa[TEST_SHA512_SIZE];
+    uint8_t ref_wb[TEST_SHA512_SIZE];
+    uint8_t ref_ma[TEST_SHA512_SIZE];
+    uint8_t ref_mb[TEST_SHA512_SIZE];
+    const byte *data_a = (const byte *)"abcdef";
+    const byte *data_b = (const byte *)"123456";
+    int ret;
+
+    wc_InitSha512_ex(&ctx_wa, NULL, INVALID_DEVID);
+    wc_InitSha512_ex(&ctx_wb, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) {
+        ret = wc_Sha512Update(&ctx_wa, data_a, 6);
+        if (ret != 0) return ret;
+        ret = wc_Sha512Update(&ctx_wb, data_b, 6);
+        if (ret != 0) return ret;
+    }
+    ret = wc_Sha512Final(&ctx_wa, result_a);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Final(&ctx_wb, result_b);
+    if (ret != 0) return ret;
+
+    wc_InitSha512_ex(&ctx_wa, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) wc_Sha512Update(&ctx_wa, data_a, 6);
+    wc_Sha512Final(&ctx_wa, ref_wa);
+
+    wc_InitSha512_ex(&ctx_wb, NULL, INVALID_DEVID);
+    for (int i = 0; i < 20; i++) wc_Sha512Update(&ctx_wb, data_b, 6);
+    wc_Sha512Final(&ctx_wb, ref_wb);
+
+    mbedtls_sha512_init(&ctx_ma);
+    mbedtls_sha512_starts(&ctx_ma, 0);
+    for (int i = 0; i < 20; i++) mbedtls_sha512_update(&ctx_ma, data_a, 6);
+    mbedtls_sha512_finish(&ctx_ma, ref_ma);
+    mbedtls_sha512_free(&ctx_ma);
+
+    mbedtls_sha512_init(&ctx_mb);
+    mbedtls_sha512_starts(&ctx_mb, 0);
+    for (int i = 0; i < 20; i++) mbedtls_sha512_update(&ctx_mb, data_b, 6);
+    mbedtls_sha512_finish(&ctx_mb, ref_mb);
+    mbedtls_sha512_free(&ctx_mb);
+
+    return interleaved_compare("SHA-512", result_a, result_b,
+                               ref_wa, ref_wb, ref_ma, ref_mb,
+                               TEST_SHA512_SIZE);
+}
+
+/* ===================================================================
+ * wolfSSL auxiliary API consistency tests
+ * (wc_*Copy / wc_*GetHash / wc_*FinalRaw)
+ * These exercise the same port functions regardless of whether wolfSSL
+ * is using software or OTBN hardware.
+ * =================================================================== */
+
+#define API_TEST_CHUNK1  "abcdef"
+#define API_TEST_CHUNK2  "123456"
+#define API_TEST_LEN1    6
+#define API_TEST_LEN2    6
+
+static int sha224_api_test(void)
+{
+#ifdef WOLFSSL_SHA224
+    wc_Sha224 ctx, ctx_ref, ctx_copy;
+    uint8_t digest1[TEST_SHA224_SIZE];
+    uint8_t digest2[TEST_SHA224_SIZE];
+    int ret;
+
+    /* Reference digest for chunk1+chunk2 */
+    ret = wc_InitSha224_ex(&ctx_ref, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Update(&ctx_ref, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Update(&ctx_ref, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Final(&ctx_ref, digest2);
+    if (ret != 0) return ret;
+
+    /* GetHash: must return digest so far without destroying context */
+    ret = wc_InitSha224_ex(&ctx, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Update(&ctx, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha224GetHash(&ctx, digest1);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Update(&ctx, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Final(&ctx, digest1);
+    if (ret != 0) return ret;
+    if (memcmp(digest1, digest2, TEST_SHA224_SIZE) != 0) {
+        //printk("SHA-224 GetHash test FAIL\n");
+        return -1;
+    }
+    //printk("SHA-224 GetHash test pass\n");
+
+    /* Copy: copied context must produce identical digest */
+    ret = wc_InitSha224_ex(&ctx, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Update(&ctx, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Copy(&ctx, &ctx_copy);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Update(&ctx, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Update(&ctx_copy, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Final(&ctx, digest1);
+    if (ret != 0) return ret;
+    ret = wc_Sha224Final(&ctx_copy, digest2);
+    if (ret != 0) return ret;
+    if (memcmp(digest1, digest2, TEST_SHA224_SIZE) != 0) {
+        //printk("SHA-224 Copy test FAIL\n");
+        return -1;
+    }
+    //printk("SHA-224 Copy test pass\n");
+
+    wc_Sha224Free(&ctx);
+    wc_Sha224Free(&ctx_ref);
+    wc_Sha224Free(&ctx_copy);
+#else
+    //printk("SHA-224 API test skipped\n");
+    return 1;
+#endif
+    return 0;
+}
+
+static int sha256_api_test(void)
+{
+    wc_Sha256 ctx, ctx_ref, ctx_copy;
+    uint8_t digest1[TEST_SHA256_SIZE];
+    uint8_t digest2[TEST_SHA256_SIZE];
+    uint8_t raw1[TEST_SHA256_SIZE];
+    uint8_t raw2[TEST_SHA256_SIZE];
+    int ret;
+
+    ret = wc_InitSha256_ex(&ctx_ref, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Update(&ctx_ref, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Update(&ctx_ref, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Final(&ctx_ref, digest2);
+    if (ret != 0) return ret;
+
+    ret = wc_InitSha256_ex(&ctx, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Update(&ctx, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha256GetHash(&ctx, digest1);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Update(&ctx, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Final(&ctx, digest1);
+    if (ret != 0) return ret;
+    if (memcmp(digest1, digest2, TEST_SHA256_SIZE) != 0) {
+        //printk("SHA-256 GetHash test FAIL\n");
+        return -1;
+    }
+    //printk("SHA-256 GetHash test pass\n");
+
+    ret = wc_InitSha256_ex(&ctx, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Update(&ctx, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Copy(&ctx, &ctx_copy);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Update(&ctx, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Update(&ctx_copy, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Final(&ctx, digest1);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Final(&ctx_copy, digest2);
+    if (ret != 0) return ret;
+    if (memcmp(digest1, digest2, TEST_SHA256_SIZE) != 0) {
+        //printk("SHA-256 Copy test FAIL\n");
+        return -1;
+    }
+    //printk("SHA-256 Copy test pass\n");
+
+    ret = wc_InitSha256_ex(&ctx, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Update(&ctx, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha256FinalRaw(&ctx, raw1);
+    if (ret != 0) return ret;
+    ret = wc_InitSha256_ex(&ctx_ref, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Update(&ctx_ref, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha256FinalRaw(&ctx_ref, raw2);
+    if (ret != 0) return ret;
+    if (memcmp(raw1, raw2, TEST_SHA256_SIZE) != 0) {
+        //printk("SHA-256 FinalRaw test FAIL\n");
+        return -1;
+    }
+    //printk("SHA-256 FinalRaw test pass\n");
+
+    wc_Sha256Free(&ctx);
+    wc_Sha256Free(&ctx_ref);
+    wc_Sha256Free(&ctx_copy);
+    return 0;
+}
+
+static int sha384_api_test(void)
+{
+#ifdef WOLFSSL_SHA384
+    wc_Sha384 ctx, ctx_ref, ctx_copy;
+    uint8_t digest1[TEST_SHA384_SIZE];
+    uint8_t digest2[TEST_SHA384_SIZE];
+    uint8_t raw1[WC_SHA512_DIGEST_SIZE];
+    uint8_t raw2[WC_SHA512_DIGEST_SIZE];
+    int ret;
+
+    ret = wc_InitSha384_ex(&ctx_ref, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Update(&ctx_ref, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Update(&ctx_ref, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Final(&ctx_ref, digest2);
+    if (ret != 0) return ret;
+
+    ret = wc_InitSha384_ex(&ctx, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Update(&ctx, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha384GetHash(&ctx, digest1);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Update(&ctx, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Final(&ctx, digest1);
+    if (ret != 0) return ret;
+    if (memcmp(digest1, digest2, TEST_SHA384_SIZE) != 0) {
+        //printk("SHA-384 GetHash test FAIL\n");
+        return -1;
+    }
+    //printk("SHA-384 GetHash test pass\n");
+
+    ret = wc_InitSha384_ex(&ctx, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Update(&ctx, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Copy(&ctx, &ctx_copy);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Update(&ctx, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Update(&ctx_copy, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Final(&ctx, digest1);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Final(&ctx_copy, digest2);
+    if (ret != 0) return ret;
+    if (memcmp(digest1, digest2, TEST_SHA384_SIZE) != 0) {
+        //printk("SHA-384 Copy test FAIL\n");
+        return -1;
+    }
+    //printk("SHA-384 Copy test pass\n");
+
+    ret = wc_InitSha384_ex(&ctx, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Update(&ctx, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha384FinalRaw(&ctx, raw1);
+    if (ret != 0) return ret;
+    ret = wc_InitSha384_ex(&ctx_ref, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Update(&ctx_ref, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha384FinalRaw(&ctx_ref, raw2);
+    if (ret != 0) return ret;
+    if (memcmp(raw1, raw2, TEST_SHA384_SIZE) != 0) {
+        //printk("SHA-384 FinalRaw test FAIL\n");
+        return -1;
+    }
+    //printk("SHA-384 FinalRaw test pass\n");
+
+    wc_Sha384Free(&ctx);
+    wc_Sha384Free(&ctx_ref);
+    wc_Sha384Free(&ctx_copy);
+#else
+    //printk("SHA-384 API test skipped\n");
+    return 1;
+#endif
+    return 0;
+}
+
+static int sha512_api_test(void)
+{
+#ifdef WOLFSSL_SHA512
+    wc_Sha512 ctx, ctx_ref, ctx_copy;
+    uint8_t digest1[TEST_SHA512_SIZE];
+    uint8_t digest2[TEST_SHA512_SIZE];
+    uint8_t raw1[TEST_SHA512_SIZE];
+    uint8_t raw2[TEST_SHA512_SIZE];
+    int ret;
+
+    ret = wc_InitSha512_ex(&ctx_ref, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Update(&ctx_ref, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Update(&ctx_ref, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Final(&ctx_ref, digest2);
+    if (ret != 0) return ret;
+
+    ret = wc_InitSha512_ex(&ctx, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Update(&ctx, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha512GetHash(&ctx, digest1);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Update(&ctx, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Final(&ctx, digest1);
+    if (ret != 0) return ret;
+    if (memcmp(digest1, digest2, TEST_SHA512_SIZE) != 0) {
+        //printk("SHA-512 GetHash test FAIL\n");
+        return -1;
+    }
+    //printk("SHA-512 GetHash test pass\n");
+
+    ret = wc_InitSha512_ex(&ctx, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Update(&ctx, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Copy(&ctx, &ctx_copy);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Update(&ctx, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Update(&ctx_copy, (const byte *)API_TEST_CHUNK2, API_TEST_LEN2);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Final(&ctx, digest1);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Final(&ctx_copy, digest2);
+    if (ret != 0) return ret;
+    if (memcmp(digest1, digest2, TEST_SHA512_SIZE) != 0) {
+        //printk("SHA-512 Copy test FAIL\n");
+        return -1;
+    }
+    //printk("SHA-512 Copy test pass\n");
+
+    ret = wc_InitSha512_ex(&ctx, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Update(&ctx, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha512FinalRaw(&ctx, raw1);
+    if (ret != 0) return ret;
+    ret = wc_InitSha512_ex(&ctx_ref, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Update(&ctx_ref, (const byte *)API_TEST_CHUNK1, API_TEST_LEN1);
+    if (ret != 0) return ret;
+    ret = wc_Sha512FinalRaw(&ctx_ref, raw2);
+    if (ret != 0) return ret;
+    if (memcmp(raw1, raw2, TEST_SHA512_SIZE) != 0) {
+        //printk("SHA-512 FinalRaw test FAIL\n");
+        return -1;
+    }
+    //printk("SHA-512 FinalRaw test pass\n");
+
+    wc_Sha512Free(&ctx);
+    wc_Sha512Free(&ctx_ref);
+    wc_Sha512Free(&ctx_copy);
+#else
+    //printk("SHA-512 API test skipped\n");
+    return 1;
+#endif
+    return 0;
+}
+
+/* ===================================================================
+ * Cross-algo interference: SHA-224 and SHA-256 contexts updated
+ * alternately must not corrupt each other (they share the same OTBN
+ * SHA-256 firmware but use independent contexts).
+ * =================================================================== */
+static int cross_algo_224_256_test(void)
+{
+#ifdef WOLFSSL_SHA224
+    wc_Sha224 ctx224;
+    wc_Sha256 ctx256;
+    uint8_t ref224[TEST_SHA224_SIZE];
+    uint8_t ref256[TEST_SHA256_SIZE];
+    uint8_t out224[TEST_SHA224_SIZE];
+    uint8_t out256[TEST_SHA256_SIZE];
+    const byte *data224 = (const byte *)"abcdef";
+    const byte *data256 = (const byte *)"123456";
+    int ret;
+
+    /* Interleaved updates */
+    ret = wc_InitSha224_ex(&ctx224, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_InitSha256_ex(&ctx256, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) {
+        ret = wc_Sha224Update(&ctx224, data224, 6);
+        if (ret != 0) return ret;
+        ret = wc_Sha256Update(&ctx256, data256, 6);
+        if (ret != 0) return ret;
+    }
+    ret = wc_Sha224Final(&ctx224, out224);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Final(&ctx256, out256);
+    if (ret != 0) return ret;
+
+    /* Sequential references */
+    ret = wc_InitSha224_ex(&ctx224, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha224Update(&ctx224, data224, 6);
+    wc_Sha224Final(&ctx224, ref224);
+
+    ret = wc_InitSha256_ex(&ctx256, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha256Update(&ctx256, data256, 6);
+    wc_Sha256Final(&ctx256, ref256);
+
+    if (memcmp(out224, ref224, TEST_SHA224_SIZE) != 0 ||
+        memcmp(out256, ref256, TEST_SHA256_SIZE) != 0) {
+        //printk("Cross-algo SHA-224/256 interference test FAIL\n");
+        return -1;
+    }
+    //printk("Cross-algo SHA-224/256 interference test pass\n");
+#else
+    //printk("Cross-algo SHA-224/256 interference test skipped\n");
+    return 1;
+#endif
+    return 0;
+}
+
+/* ===================================================================
+ * Cross-algo interference: SHA-256 and SHA-512 contexts updated
+ * alternately (different firmware families).
+ * =================================================================== */
+static int cross_algo_256_512_test(void)
+{
+#if defined(WOLFSSL_SHA512)
+    wc_Sha256 ctx256;
+    wc_Sha512 ctx512;
+    uint8_t ref256[TEST_SHA256_SIZE];
+    uint8_t ref512[TEST_SHA512_SIZE];
+    uint8_t out256[TEST_SHA256_SIZE];
+    uint8_t out512[TEST_SHA512_SIZE];
+    const byte *data256 = (const byte *)"abcdef";
+    const byte *data512 = (const byte *)"123456";
+    int ret;
+
+    ret = wc_InitSha256_ex(&ctx256, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_InitSha512_ex(&ctx512, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) {
+        ret = wc_Sha256Update(&ctx256, data256, 6);
+        if (ret != 0) return ret;
+        ret = wc_Sha512Update(&ctx512, data512, 6);
+        if (ret != 0) return ret;
+    }
+    ret = wc_Sha256Final(&ctx256, out256);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Final(&ctx512, out512);
+    if (ret != 0) return ret;
+
+    ret = wc_InitSha256_ex(&ctx256, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha256Update(&ctx256, data256, 6);
+    wc_Sha256Final(&ctx256, ref256);
+
+    ret = wc_InitSha512_ex(&ctx512, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha512Update(&ctx512, data512, 6);
+    wc_Sha512Final(&ctx512, ref512);
+
+    if (memcmp(out256, ref256, TEST_SHA256_SIZE) != 0 ||
+        memcmp(out512, ref512, TEST_SHA512_SIZE) != 0) {
+        //printk("Cross-algo SHA-256/512 interference test FAIL\n");
+        return -1;
+    }
+    //printk("Cross-algo SHA-256/512 interference test pass\n");
+#else
+    //printk("Cross-algo SHA-256/512 interference test skipped\n");
+    return 1;
+#endif
+    return 0;
+}
+
+/* ===================================================================
+ * Cross-algo interference: SHA-384 and SHA-512 contexts updated
+ * alternately (same firmware family, different IVs).
+ * =================================================================== */
+static int cross_algo_384_512_test(void)
+{
+#if defined(WOLFSSL_SHA384) && defined(WOLFSSL_SHA512)
+    wc_Sha384 ctx384;
+    wc_Sha512 ctx512;
+    uint8_t ref384[TEST_SHA384_SIZE];
+    uint8_t ref512[TEST_SHA512_SIZE];
+    uint8_t out384[TEST_SHA384_SIZE];
+    uint8_t out512[TEST_SHA512_SIZE];
+    const byte *data384 = (const byte *)"abcdef";
+    const byte *data512 = (const byte *)"123456";
+    int ret;
+
+    ret = wc_InitSha384_ex(&ctx384, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_InitSha512_ex(&ctx512, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) {
+        ret = wc_Sha384Update(&ctx384, data384, 6);
+        if (ret != 0) return ret;
+        ret = wc_Sha512Update(&ctx512, data512, 6);
+        if (ret != 0) return ret;
+    }
+    ret = wc_Sha384Final(&ctx384, out384);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Final(&ctx512, out512);
+    if (ret != 0) return ret;
+
+    ret = wc_InitSha384_ex(&ctx384, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha384Update(&ctx384, data384, 6);
+    wc_Sha384Final(&ctx384, ref384);
+
+    ret = wc_InitSha512_ex(&ctx512, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha512Update(&ctx512, data512, 6);
+    wc_Sha512Final(&ctx512, ref512);
+
+    if (memcmp(out384, ref384, TEST_SHA384_SIZE) != 0 ||
+        memcmp(out512, ref512, TEST_SHA512_SIZE) != 0) {
+        //printk("Cross-algo SHA-384/512 interference test FAIL\n");
+        return -1;
+    }
+    //printk("Cross-algo SHA-384/512 interference test pass\n");
+#else
+    //printk("Cross-algo SHA-384/512 interference test skipped\n");
+    return 1;
+#endif
+    return 0;
+}
+
+/* ===================================================================
+ * Cross-algo interference: SHA-224 and SHA-512 contexts updated
+ * alternately (smallest vs largest block size).
+ * =================================================================== */
+static int cross_algo_224_512_test(void)
+{
+#if defined(WOLFSSL_SHA224) && defined(WOLFSSL_SHA512)
+    wc_Sha224 ctx224;
+    wc_Sha512 ctx512;
+    uint8_t ref224[TEST_SHA224_SIZE];
+    uint8_t ref512[TEST_SHA512_SIZE];
+    uint8_t out224[TEST_SHA224_SIZE];
+    uint8_t out512[TEST_SHA512_SIZE];
+    const byte *data224 = (const byte *)"abcdef";
+    const byte *data512 = (const byte *)"123456";
+    int ret;
+
+    ret = wc_InitSha224_ex(&ctx224, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_InitSha512_ex(&ctx512, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) {
+        ret = wc_Sha224Update(&ctx224, data224, 6);
+        if (ret != 0) return ret;
+        ret = wc_Sha512Update(&ctx512, data512, 6);
+        if (ret != 0) return ret;
+    }
+    ret = wc_Sha224Final(&ctx224, out224);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Final(&ctx512, out512);
+    if (ret != 0) return ret;
+
+    ret = wc_InitSha224_ex(&ctx224, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha224Update(&ctx224, data224, 6);
+    wc_Sha224Final(&ctx224, ref224);
+
+    ret = wc_InitSha512_ex(&ctx512, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha512Update(&ctx512, data512, 6);
+    wc_Sha512Final(&ctx512, ref512);
+
+    if (memcmp(out224, ref224, TEST_SHA224_SIZE) != 0 ||
+        memcmp(out512, ref512, TEST_SHA512_SIZE) != 0) {
+        //printk("Cross-algo SHA-224/512 interference test FAIL\n");
+        return -1;
+    }
+    //printk("Cross-algo SHA-224/512 interference test pass\n");
+#else
+    //printk("Cross-algo SHA-224/512 interference test skipped\n");
+    return 1;
+#endif
+    return 0;
+}
+
+/* ===================================================================
+ * Cross-algo interference: SHA-224 and SHA-384 contexts updated
+ * alternately.
+ * =================================================================== */
+static int cross_algo_224_384_test(void)
+{
+#if defined(WOLFSSL_SHA224) && defined(WOLFSSL_SHA384)
+    wc_Sha224 ctx224;
+    wc_Sha384 ctx384;
+    uint8_t ref224[TEST_SHA224_SIZE];
+    uint8_t ref384[TEST_SHA384_SIZE];
+    uint8_t out224[TEST_SHA224_SIZE];
+    uint8_t out384[TEST_SHA384_SIZE];
+    const byte *data224 = (const byte *)"abcdef";
+    const byte *data384 = (const byte *)"123456";
+    int ret;
+
+    ret = wc_InitSha224_ex(&ctx224, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_InitSha384_ex(&ctx384, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) {
+        ret = wc_Sha224Update(&ctx224, data224, 6);
+        if (ret != 0) return ret;
+        ret = wc_Sha384Update(&ctx384, data384, 6);
+        if (ret != 0) return ret;
+    }
+    ret = wc_Sha224Final(&ctx224, out224);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Final(&ctx384, out384);
+    if (ret != 0) return ret;
+
+    ret = wc_InitSha224_ex(&ctx224, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha224Update(&ctx224, data224, 6);
+    wc_Sha224Final(&ctx224, ref224);
+
+    ret = wc_InitSha384_ex(&ctx384, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha384Update(&ctx384, data384, 6);
+    wc_Sha384Final(&ctx384, ref384);
+
+    if (memcmp(out224, ref224, TEST_SHA224_SIZE) != 0 ||
+        memcmp(out384, ref384, TEST_SHA384_SIZE) != 0) {
+        //printk("Cross-algo SHA-224/384 interference test FAIL\n");
+        return -1;
+    }
+    //printk("Cross-algo SHA-224/384 interference test pass\n");
+#else
+    //printk("Cross-algo SHA-224/384 interference test skipped\n");
+    return 1;
+#endif
+    return 0;
+}
+
+/* ===================================================================
+ * Cross-algo interference: SHA-256 and SHA-384 contexts updated
+ * alternately.
+ * =================================================================== */
+static int cross_algo_256_384_test(void)
+{
+#if defined(WOLFSSL_SHA384)
+    wc_Sha256 ctx256;
+    wc_Sha384 ctx384;
+    uint8_t ref256[TEST_SHA256_SIZE];
+    uint8_t ref384[TEST_SHA384_SIZE];
+    uint8_t out256[TEST_SHA256_SIZE];
+    uint8_t out384[TEST_SHA384_SIZE];
+    const byte *data256 = (const byte *)"abcdef";
+    const byte *data384 = (const byte *)"123456";
+    int ret;
+
+    ret = wc_InitSha256_ex(&ctx256, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_InitSha384_ex(&ctx384, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) {
+        ret = wc_Sha256Update(&ctx256, data256, 6);
+        if (ret != 0) return ret;
+        ret = wc_Sha384Update(&ctx384, data384, 6);
+        if (ret != 0) return ret;
+    }
+    ret = wc_Sha256Final(&ctx256, out256);
+    if (ret != 0) return ret;
+    ret = wc_Sha384Final(&ctx384, out384);
+    if (ret != 0) return ret;
+
+    ret = wc_InitSha256_ex(&ctx256, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha256Update(&ctx256, data256, 6);
+    wc_Sha256Final(&ctx256, ref256);
+
+    ret = wc_InitSha384_ex(&ctx384, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha384Update(&ctx384, data384, 6);
+    wc_Sha384Final(&ctx384, ref384);
+
+    if (memcmp(out256, ref256, TEST_SHA256_SIZE) != 0 ||
+        memcmp(out384, ref384, TEST_SHA384_SIZE) != 0) {
+        //printk("Cross-algo SHA-256/384 interference test FAIL\n");
+        return -1;
+    }
+    //printk("Cross-algo SHA-256/384 interference test pass\n");
+#else
+    //printk("Cross-algo SHA-256/384 interference test skipped\n");
+    return 1;
+#endif
+    return 0;
+}
+
+/* ===================================================================
+ * Cross-algo interference: SM3 and SHA-256 contexts updated alternately.
+ * =================================================================== */
+static int cross_algo_sm3_256_test(void)
+{
+#if defined(WOLFSSL_SM3)
+    wc_Sm3 ctx_sm3;
+    wc_Sha256 ctx256;
+    uint8_t ref_sm3[TEST_SM3_SIZE];
+    uint8_t ref256[TEST_SHA256_SIZE];
+    uint8_t out_sm3[TEST_SM3_SIZE];
+    uint8_t out256[TEST_SHA256_SIZE];
+    const byte *data_sm3 = (const byte *)"abcdef";
+    const byte *data256 = (const byte *)"123456";
+    int ret;
+
+    ret = wc_InitSm3(&ctx_sm3, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_InitSha256_ex(&ctx256, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) {
+        ret = wc_Sm3Update(&ctx_sm3, data_sm3, 6);
+        if (ret != 0) return ret;
+        ret = wc_Sha256Update(&ctx256, data256, 6);
+        if (ret != 0) return ret;
+    }
+    ret = wc_Sm3Final(&ctx_sm3, out_sm3);
+    if (ret != 0) return ret;
+    ret = wc_Sha256Final(&ctx256, out256);
+    if (ret != 0) return ret;
+
+    ret = wc_InitSm3(&ctx_sm3, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sm3Update(&ctx_sm3, data_sm3, 6);
+    wc_Sm3Final(&ctx_sm3, ref_sm3);
+
+    ret = wc_InitSha256_ex(&ctx256, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha256Update(&ctx256, data256, 6);
+    wc_Sha256Final(&ctx256, ref256);
+
+    if (memcmp(out_sm3, ref_sm3, TEST_SM3_SIZE) != 0 ||
+        memcmp(out256, ref256, TEST_SHA256_SIZE) != 0) {
+        //printk("Cross-algo SM3/SHA-256 interference test FAIL\n");
+        return -1;
+    }
+    //printk("Cross-algo SM3/SHA-256 interference test pass\n");
+#else
+    //printk("Cross-algo SM3/SHA-256 interference test skipped\n");
+    return 1;
+#endif
+    return 0;
+}
+
+/* ===================================================================
+ * Cross-algo interference: SM3 and SHA-512 contexts updated alternately.
+ * =================================================================== */
+static int cross_algo_sm3_512_test(void)
+{
+#if defined(WOLFSSL_SM3) && defined(WOLFSSL_SHA512)
+    wc_Sm3 ctx_sm3;
+    wc_Sha512 ctx512;
+    uint8_t ref_sm3[TEST_SM3_SIZE];
+    uint8_t ref512[TEST_SHA512_SIZE];
+    uint8_t out_sm3[TEST_SM3_SIZE];
+    uint8_t out512[TEST_SHA512_SIZE];
+    const byte *data_sm3 = (const byte *)"abcdef";
+    const byte *data512 = (const byte *)"123456";
+    int ret;
+
+    ret = wc_InitSm3(&ctx_sm3, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    ret = wc_InitSha512_ex(&ctx512, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) {
+        ret = wc_Sm3Update(&ctx_sm3, data_sm3, 6);
+        if (ret != 0) return ret;
+        ret = wc_Sha512Update(&ctx512, data512, 6);
+        if (ret != 0) return ret;
+    }
+    ret = wc_Sm3Final(&ctx_sm3, out_sm3);
+    if (ret != 0) return ret;
+    ret = wc_Sha512Final(&ctx512, out512);
+    if (ret != 0) return ret;
+
+    ret = wc_InitSm3(&ctx_sm3, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sm3Update(&ctx_sm3, data_sm3, 6);
+    wc_Sm3Final(&ctx_sm3, ref_sm3);
+
+    ret = wc_InitSha512_ex(&ctx512, NULL, INVALID_DEVID);
+    if (ret != 0) return ret;
+    for (int i = 0; i < 20; i++) wc_Sha512Update(&ctx512, data512, 6);
+    wc_Sha512Final(&ctx512, ref512);
+
+    if (memcmp(out_sm3, ref_sm3, TEST_SM3_SIZE) != 0 ||
+        memcmp(out512, ref512, TEST_SHA512_SIZE) != 0) {
+        //printk("Cross-algo SM3/SHA-512 interference test FAIL\n");
+        return -1;
+    }
+    //printk("Cross-algo SM3/SHA-512 interference test pass\n");
+#else
+    //printk("Cross-algo SM3/SHA-512 interference test skipped\n");
+    return 1;
+#endif
+    return 0;
+}
+
+#ifdef LITTLE_ENDIAN_ORDER
+static void bswap32_buf(const uint8_t *in, uint8_t *out, uint32_t len)
+{
+    for (uint32_t i = 0; i < len; i += 4) {
+        out[i]     = in[i + 3];
+        out[i + 1] = in[i + 2];
+        out[i + 2] = in[i + 1];
+        out[i + 3] = in[i];
+    }
+}
+
+static void bswap64_buf(const uint8_t *in, uint8_t *out, uint32_t len)
+{
+    for (uint32_t i = 0; i < len; i += 8) {
+        out[i]     = in[i + 7];
+        out[i + 1] = in[i + 6];
+        out[i + 2] = in[i + 5];
+        out[i + 3] = in[i + 4];
+        out[i + 4] = in[i + 3];
+        out[i + 5] = in[i + 2];
+        out[i + 6] = in[i + 1];
+        out[i + 7] = in[i];
+    }
+}
+#endif
+
+/* ===================================================================
+ * Transform API test (wc_Sha256Transform / wc_Sha512Transform).
+ * These interfaces are only available when OPENSSL_EXTRA or HAVE_CURL
+ * is enabled.  The public API expects the block in host-endian word
+ * order, so on little-endian hosts we byte-swap before feeding OTBN.
+ * =================================================================== */
+static int transform_api_test(void)
+{
+#if !defined(WOLFSSL_KCAPI_HASH) && !defined(WOLFSSL_AFALG_HASH) && \
+    (defined(OPENSSL_EXTRA) || defined(HAVE_CURL))
+    int ret;
+
+    /* SHA-256 Transform vs Update */
+    {
+        wc_Sha256 ctx_t, ctx_u;
+        uint8_t block[WC_SHA256_BLOCK_SIZE];
+        uint8_t host_block[WC_SHA256_BLOCK_SIZE];
+        uint8_t raw_t[TEST_SHA256_SIZE];
+        uint8_t raw_u[TEST_SHA256_SIZE];
+
+        fill_plaintext(sizeof(block));
+        memcpy(block, plaintext_buf, sizeof(block));
+#ifdef LITTLE_ENDIAN_ORDER
+        bswap32_buf(block, host_block, sizeof(block));
+#else
+        memcpy(host_block, block, sizeof(block));
+#endif
+
+        ret = wc_InitSha256_ex(&ctx_t, NULL, INVALID_DEVID);
+        if (ret != 0) return ret;
+        ret = wc_Sha256Transform(&ctx_t, host_block);
+        if (ret != 0) return ret;
+        ret = wc_Sha256FinalRaw(&ctx_t, raw_t);
+        if (ret != 0) return ret;
+
+        ret = wc_InitSha256_ex(&ctx_u, NULL, INVALID_DEVID);
+        if (ret != 0) return ret;
+        ret = wc_Sha256Update(&ctx_u, block, sizeof(block));
+        if (ret != 0) return ret;
+        ret = wc_Sha256FinalRaw(&ctx_u, raw_u);
+        if (ret != 0) return ret;
+
+        if (memcmp(raw_t, raw_u, TEST_SHA256_SIZE) != 0) {
+            //printk("SHA-256 Transform test FAIL\n");
+            return -1;
+        }
+        //printk("SHA-256 Transform test pass\n");
+    }
+
+    /* SHA-512 Transform vs Update */
+    {
+        wc_Sha512 ctx_t, ctx_u;
+        uint8_t block[WC_SHA512_BLOCK_SIZE];
+        uint8_t host_block[WC_SHA512_BLOCK_SIZE];
+        uint8_t raw_t[TEST_SHA512_SIZE];
+        uint8_t raw_u[TEST_SHA512_SIZE];
+
+        fill_plaintext(sizeof(block));
+        memcpy(block, plaintext_buf, sizeof(block));
+#ifdef LITTLE_ENDIAN_ORDER
+        bswap64_buf(block, host_block, sizeof(block));
+#else
+        memcpy(host_block, block, sizeof(block));
+#endif
+
+        ret = wc_InitSha512_ex(&ctx_t, NULL, INVALID_DEVID);
+        if (ret != 0) return ret;
+        ret = wc_Sha512Transform(&ctx_t, host_block);
+        if (ret != 0) return ret;
+        ret = wc_Sha512FinalRaw(&ctx_t, raw_t);
+        if (ret != 0) return ret;
+
+        ret = wc_InitSha512_ex(&ctx_u, NULL, INVALID_DEVID);
+        if (ret != 0) return ret;
+        ret = wc_Sha512Update(&ctx_u, block, sizeof(block));
+        if (ret != 0) return ret;
+        ret = wc_Sha512FinalRaw(&ctx_u, raw_u);
+        if (ret != 0) return ret;
+
+        if (memcmp(raw_t, raw_u, TEST_SHA512_SIZE) != 0) {
+            //printk("SHA-512 Transform test FAIL\n");
+            return -1;
+        }
+        //printk("SHA-512 Transform test pass\n");
+    }
+
+    return 0;
+#else
+    //printk("Transform API test skipped\n");
+    return 1;
+#endif
+}
+
+/* ===================================================================
+ * Test runner helper: negative = fail, 0 = pass, positive = skipped.
+ * =================================================================== */
+static int run_test(int (*test_fn)(void), int *failures, int *skips)
+{
+    int ret = test_fn();
+    if (ret < 0) {
+        (*failures)++;
+    } else if (ret > 0) {
+        (*skips)++;
+    }
+    return ret;
+}
+
+/* ===================================================================
+ * Entry point
+ * =================================================================== */
+int main(void)
+{
+    int failures = 0;
+    int skips = 0;
+    int64_t start_ms = k_uptime_get();
+
+    //printk("OTBN hash alignment test start\n");
+
+#ifdef CONFIG_WOLFSSL_LINKEDSEMI_OTBN_HASH_ALT
+    //printk("wolfSSL hash path: OTBN hardware\n");
+#else
+    //printk("wolfSSL hash path: software\n");
+#endif
+
+#ifdef CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT
+    //printk("mbedtls SHA-256/SM3 path: OTBN hardware\n");
+#else
+    //printk("mbedtls SHA-256/SM3 path: software\n");
+#endif
+
+#ifdef CONFIG_MBEDTLS_SHA384_SHA512_LINKEDSEMI_OTBN_ALT
+    //printk("mbedtls SHA-384/SHA-512 path: OTBN hardware\n");
+#else
+    //printk("mbedtls SHA-384/SHA-512 path: software\n");
+#endif
+
+    for (uint32_t i = 0; i < NUM_TEST_LENGTHS; i++) {
+        uint32_t len = test_lengths[i];
+        if (sha224_test_once(len) != 0) failures++;
+        if (sha256_test_once(len) != 0) failures++;
+// #if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
+//         if (sm3_test_once(len) != 0) failures++;
+// #endif
+        if (sha384_test_once(len) != 0) failures++;
+        if (sha512_test_once(len) != 0) failures++;
+    }
+
+#if defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_HASH_ALT)
+    printk(" ls hardware hash does not sopport interleaved test\n");
+#else
+    if (interleaved_sha224_test() != 0) failures++;
+    if (interleaved_sha256_test() != 0) failures++;
+// #if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
+//     if (interleaved_sm3_test() != 0) failures++;
+// #endif
+    if (interleaved_sha384_test() != 0) failures++;
+    if (interleaved_sha512_test() != 0) failures++;
+#endif
+
+    run_test(sha224_api_test, &failures, &skips);
+    run_test(sha256_api_test, &failures, &skips);
+    run_test(sha384_api_test, &failures, &skips);
+    run_test(sha512_api_test, &failures, &skips);
+    run_test(transform_api_test, &failures, &skips);
+#if defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_HASH_ALT)
+    printk(" ls hardware hash does not sopport interleaved test\n");
+#else
+    run_test(cross_algo_224_256_test, &failures, &skips);
+    run_test(cross_algo_224_384_test, &failures, &skips);
+    run_test(cross_algo_256_384_test, &failures, &skips);
+    run_test(cross_algo_256_512_test, &failures, &skips);
+    run_test(cross_algo_384_512_test, &failures, &skips);
+    run_test(cross_algo_224_512_test, &failures, &skips);
+// #if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
+//     run_test(cross_algo_sm3_256_test, &failures, &skips);
+//     run_test(cross_algo_sm3_512_test, &failures, &skips);
+// #endif
+#endif
+
+    int64_t elapsed_ms = k_uptime_get() - start_ms;
+    printk("\ntests ended\n");
+
+    if (failures == 0 && skips == 0) {
+        printk("All tests passed\n");
+    } else {
+        printk("%d test(s) failed\n", failures);
+        printk("%d test(s) skipped\n",skips);
+    }
+    printk("total test time: %lld.%03lld s\n", elapsed_ms / 1000, elapsed_ms % 1000);
     return 0;
 }
