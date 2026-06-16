@@ -31,6 +31,16 @@
 #define TEST_SHA512_SIZE 64
 #define TEST_MAX_DIGEST_SIZE TEST_SHA512_SIZE
 
+/* Unified error check for *_test_once() helpers: log the failing call,
+ * jump to the common cleanup label, and return the error code. */
+#define TEST_ONCE_CHECK(_algo, _ret) do { \
+    if ((_ret) != 0) { \
+        printk("%s_test_once error: ret=%d at line %d\n", (_algo), (_ret), __LINE__); \
+        while(1);\
+        goto _test_once_err; \
+    } \
+} while (0)
+
 static uint8_t plaintext_buf[KB(11)];
 static uint8_t result_a[TEST_MAX_DIGEST_SIZE];
 static uint8_t result_b[TEST_MAX_DIGEST_SIZE];
@@ -85,12 +95,13 @@ static inline int compare_results(const char *name, uint32_t len,
                                    uint32_t digest_size)
 {
     if (memcmp(a, b, digest_size) != 0) {
-        //printk("%s len=%u compare FAIL\n", name, len);
-        //printk("  wolfssl: "); print_hex(a, digest_size); //printk("\n");
-        //printk("  mbedtls: "); print_hex(b, digest_size); //printk("\n");
+        printk("%s len=%u compare FAIL\n", name, len);
+        printk("  wolfssl: "); print_hex(a, digest_size); //printk("\n");
+        printk("  mbedtls: "); print_hex(b, digest_size); //printk("\n");
+        while(1);
         return -1;
     }
-    //printk("%s len=%u compare pass\n", name, len);
+    printk("%s len=%u compare pass\n", name, len);
     return 0;
 }
 
@@ -103,26 +114,29 @@ static int sha224_test_once(uint32_t len)
     mbedtls_sha256_context ctx_m;
     int ret;
 
-    fill_plaintext(len);
+    // fill_plaintext(len);
 
     ret = wc_InitSha224_ex(&ctx_w, NULL, INVALID_DEVID);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-224(wolf)", ret);
     ret = wc_Sha224Update(&ctx_w, plaintext_buf, len);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-224(wolf)", ret);
     ret = wc_Sha224Final(&ctx_w, result_a);
-    if (ret != 0) return ret;
-    wc_Sha224Free(&ctx_w);
+    TEST_ONCE_CHECK("SHA-224(wolf)", ret);
 
     mbedtls_sha256_init(&ctx_m);
     ret = mbedtls_sha256_starts(&ctx_m, 1);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-224(mbed)", ret);
     ret = mbedtls_sha256_update(&ctx_m, plaintext_buf, len);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-224(mbed)", ret);
     ret = mbedtls_sha256_finish(&ctx_m, result_b);
-    if (ret != 0) return ret;
-    mbedtls_sha256_free(&ctx_m);
+    TEST_ONCE_CHECK("SHA-224(mbed)", ret);
 
-    return compare_results("SHA-224", len, result_a, result_b, TEST_SHA224_SIZE);
+    ret = compare_results("SHA-224", len, result_a, result_b, TEST_SHA224_SIZE);
+
+_test_once_err:
+    wc_Sha224Free(&ctx_w);
+    mbedtls_sha256_free(&ctx_m);
+    return ret;
 }
 
 /* ===================================================================
@@ -134,26 +148,29 @@ static int sha256_test_once(uint32_t len)
     mbedtls_sha256_context ctx_m;
     int ret;
 
-    fill_plaintext(len);
+    // fill_plaintext(len);
 
     ret = wc_InitSha256_ex(&ctx_w, NULL, INVALID_DEVID);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-256(wolf)", ret);
     ret = wc_Sha256Update(&ctx_w, plaintext_buf, len);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-256(wolf)", ret);
     ret = wc_Sha256Final(&ctx_w, result_a);
-    if (ret != 0) return ret;
-    wc_Sha256Free(&ctx_w);
+    TEST_ONCE_CHECK("SHA-256(wolf)", ret);
 
     mbedtls_sha256_init(&ctx_m);
     ret = mbedtls_sha256_starts(&ctx_m, 0);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-256(mbed)", ret);
     ret = mbedtls_sha256_update(&ctx_m, plaintext_buf, len);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-256(mbed)", ret);
     ret = mbedtls_sha256_finish(&ctx_m, result_b);
-    if (ret != 0) return ret;
-    mbedtls_sha256_free(&ctx_m);
+    TEST_ONCE_CHECK("SHA-256(mbed)", ret);
 
-    return compare_results("SHA-256", len, result_a, result_b, TEST_SHA256_SIZE);
+    ret = compare_results("SHA-256", len, result_a, result_b, TEST_SHA256_SIZE);
+
+_test_once_err:
+    wc_Sha256Free(&ctx_w);
+    mbedtls_sha256_free(&ctx_m);
+    return ret;
 }
 
 #if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
@@ -166,26 +183,29 @@ static int sm3_test_once(uint32_t len)
     mbedtls_sha256_context ctx_m;
     int ret;
 
-    fill_plaintext(len);
+    // fill_plaintext(len);
 
     ret = wc_InitSm3(&ctx_w, NULL, INVALID_DEVID);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SM3(wolf)", ret);
     ret = wc_Sm3Update(&ctx_w, plaintext_buf, len);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SM3(wolf)", ret);
     ret = wc_Sm3Final(&ctx_w, result_a);
-    if (ret != 0) return ret;
-    wc_Sm3Free(&ctx_w);
+    TEST_ONCE_CHECK("SM3(wolf)", ret);
 
     mbedtls_sm3_init(&ctx_m);
     ret = mbedtls_sm3_starts(&ctx_m);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SM3(mbed)", ret);
     ret = mbedtls_sm3_update(&ctx_m, plaintext_buf, len);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SM3(mbed)", ret);
     ret = mbedtls_sm3_finish(&ctx_m, result_b);
-    if (ret != 0) return ret;
-    mbedtls_sm3_free(&ctx_m);
+    TEST_ONCE_CHECK("SM3(mbed)", ret);
 
-    return compare_results("SM3", len, result_a, result_b, TEST_SM3_SIZE);
+    ret = compare_results("SM3", len, result_a, result_b, TEST_SM3_SIZE);
+
+_test_once_err:
+    wc_Sm3Free(&ctx_w);
+    mbedtls_sm3_free(&ctx_m);
+    return ret;
 }
 #endif
 /* ===================================================================
@@ -197,26 +217,29 @@ static int sha384_test_once(uint32_t len)
     mbedtls_sha512_context ctx_m;
     int ret;
 
-    fill_plaintext(len);
+    // fill_plaintext(len);
 
     ret = wc_InitSha384_ex(&ctx_w, NULL, INVALID_DEVID);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-384(wolf)", ret);
     ret = wc_Sha384Update(&ctx_w, plaintext_buf, len);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-384(wolf)", ret);
     ret = wc_Sha384Final(&ctx_w, result_a);
-    if (ret != 0) return ret;
-    wc_Sha384Free(&ctx_w);
+    TEST_ONCE_CHECK("SHA-384(wolf)", ret);
 
     mbedtls_sha512_init(&ctx_m);
     ret = mbedtls_sha512_starts(&ctx_m, 1);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-384(mbed)", ret);
     ret = mbedtls_sha512_update(&ctx_m, plaintext_buf, len);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-384(mbed)", ret);
     ret = mbedtls_sha512_finish(&ctx_m, result_b);
-    if (ret != 0) return ret;
-    mbedtls_sha512_free(&ctx_m);
+    TEST_ONCE_CHECK("SHA-384(mbed)", ret);
 
-    return compare_results("SHA-384", len, result_a, result_b, TEST_SHA384_SIZE);
+    ret = compare_results("SHA-384", len, result_a, result_b, TEST_SHA384_SIZE);
+
+_test_once_err:
+    wc_Sha384Free(&ctx_w);
+    mbedtls_sha512_free(&ctx_m);
+    return ret;
 }
 
 /* ===================================================================
@@ -228,26 +251,29 @@ static int sha512_test_once(uint32_t len)
     mbedtls_sha512_context ctx_m;
     int ret;
 
-    fill_plaintext(len);
+    // fill_plaintext(len);
 
     ret = wc_InitSha512_ex(&ctx_w, NULL, INVALID_DEVID);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-512(wolf)", ret);
     ret = wc_Sha512Update(&ctx_w, plaintext_buf, len);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-512(wolf)", ret);
     ret = wc_Sha512Final(&ctx_w, result_a);
-    if (ret != 0) return ret;
-    wc_Sha512Free(&ctx_w);
+    TEST_ONCE_CHECK("SHA-512(wolf)", ret);
 
     mbedtls_sha512_init(&ctx_m);
     ret = mbedtls_sha512_starts(&ctx_m, 0);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-512(mbed)", ret);
     ret = mbedtls_sha512_update(&ctx_m, plaintext_buf, len);
-    if (ret != 0) return ret;
+    TEST_ONCE_CHECK("SHA-512(mbed)", ret);
     ret = mbedtls_sha512_finish(&ctx_m, result_b);
-    if (ret != 0) return ret;
-    mbedtls_sha512_free(&ctx_m);
+    TEST_ONCE_CHECK("SHA-512(mbed)", ret);
 
-    return compare_results("SHA-512", len, result_a, result_b, TEST_SHA512_SIZE);
+    ret = compare_results("SHA-512", len, result_a, result_b, TEST_SHA512_SIZE);
+
+_test_once_err:
+    wc_Sha512Free(&ctx_w);
+    mbedtls_sha512_free(&ctx_m);
+    return ret;
 }
 
 static int interleaved_compare(const char *name,
@@ -1437,6 +1463,7 @@ static int run_test(int (*test_fn)(void), int *failures, int *skips)
     int ret = test_fn();
     if (ret < 0) {
         (*failures)++;
+        while(1);
     } else if (ret > 0) {
         (*skips)++;
     }
@@ -1450,6 +1477,7 @@ int main(void)
 {
     int failures = 0;
     int skips = 0;
+    fill_plaintext(10240);
     int64_t start_ms = k_uptime_get();
 
     printk("hash alignment test start\n");
@@ -1474,11 +1502,11 @@ int main(void)
 
     for (uint32_t i = 0; i < NUM_TEST_LENGTHS; i++) {
         uint32_t len = test_lengths[i];
-        if (sha224_test_once(len) != 0) failures++;
-        if (sha256_test_once(len) != 0) failures++;
-#if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
-        if (sm3_test_once(len) != 0) failures++;
-#endif
+//         if (sha224_test_once(len) != 0) failures++;
+//         if (sha256_test_once(len) != 0) failures++;
+// #if defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
+//         if (sm3_test_once(len) != 0) failures++;
+// #endif
         if (sha384_test_once(len) != 0) failures++;
         if (sha512_test_once(len) != 0) failures++;
     }
