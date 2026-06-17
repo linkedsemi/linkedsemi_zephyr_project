@@ -6,7 +6,9 @@
  *   - mbedtls (mbedtls_sha256 / mbedtls_sha512 / mbedtls_sm3)
  *
  * Whether each path uses OTBN hardware is controlled by Kconfig:
- *   CONFIG_WOLFSSL_LINKEDSEMI_OTBN_HASH_ALT
+ *   CONFIG_WOLFSSL_LINKEDSEMI_OTBN_SHA224_SHA256_ALT
+ *   CONFIG_WOLFSSL_LINKEDSEMI_OTBN_SHA384_SHA512_ALT
+ *   CONFIG_WOLFSSL_LINKEDSEMI_OTBN_SM3_ALT
  *   CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT
  *   CONFIG_MBEDTLS_SHA384_SHA512_LINKEDSEMI_OTBN_ALT
  *
@@ -1482,12 +1484,13 @@ int main(void)
 
     printk("hash alignment test start\n");
 
-#ifdef CONFIG_WOLFSSL_LINKEDSEMI_OTBN_HASH_ALT
+#if defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_SHA224_SHA256_ALT) || \
+    defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_SHA384_SHA512_ALT) || \
+    defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_SM3_ALT)
     printk("wolfSSL hash path: OTBN hardware\n");
 #else
     printk("wolfSSL hash path: software\n");
 #endif
-
 #ifdef CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT
     printk("mbedtls SHA-256/SM3 path: OTBN hardware\n");
 #else
@@ -1511,7 +1514,9 @@ int main(void)
         if (sha512_test_once(len) != 0) failures++;
     }
 
-#if defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_HASH_ALT)
+#if defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_SHA224_SHA256_ALT) || \
+    defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_SHA384_SHA512_ALT) || \
+    defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_SM3_ALT)
     printk(" ls hardware hash does not sopport interleaved test\n");
 #else
     if (interleaved_sha224_test() != 0) failures++;
@@ -1528,7 +1533,9 @@ int main(void)
     run_test(sha384_api_test, &failures, &skips);
     run_test(sha512_api_test, &failures, &skips);
     run_test(transform_api_test, &failures, &skips);
-#if defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_HASH_ALT)
+#if defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_SHA224_SHA256_ALT) || \
+    defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_SHA384_SHA512_ALT) || \
+    defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_SM3_ALT)
     printk(" ls hardware hash does not sopport interleaved test\n");
 #else
     run_test(cross_algo_224_256_test, &failures, &skips);
