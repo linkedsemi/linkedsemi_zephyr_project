@@ -25,6 +25,7 @@
  *
  ************************************************************/
 #define DIGEST_SIZE         66
+#define ECDSA_PERF_LOOPS    50
 static uint8_t fix_trng_output[DIGEST_SIZE] = { 0xcc, 0xbb, 0xaa};
 #if DT_HAS_CHOSEN(zephyr_entropy)
 #if !defined(CONFIG_WOLFSSL_LINKEDSEMI_OTBN_DELEGATION_CLIENT)
@@ -265,19 +266,39 @@ int ecdsa_test_curve(mbedtls_ecp_group_id curve)
     size_t hlen;
     hlen = runIt_unhexify(pHash, hash_str);
     // sign
-    if(mbedtls_ecdsa_sign(&ctx.private_grp, &r, &s, &ctx.private_d, pHash, hlen, ls_mbedtls_get_random, NULL) != 0)
+    int64_t start_sign = k_uptime_get();
+    for (int i = 0; i < ECDSA_PERF_LOOPS; i++)
     {
-        err = -1;
-        printf(" ecdsa sign failed\n");
-        goto exit_test;
+        if(mbedtls_ecdsa_sign(&ctx.private_grp, &r, &s, &ctx.private_d, pHash, hlen, ls_mbedtls_get_fixed, NULL) != 0)
+        {
+            err = -1;
+            printf(" ecdsa sign failed\n");
+            goto exit_test;
+        }
     }
+    int64_t end_sign = k_uptime_get();
+    uint32_t sign_ms = (uint32_t)(end_sign - start_sign);
+    if (sign_ms == 0) sign_ms = 1;
+
     // verify
-    if(mbedtls_ecdsa_verify(&ctx.private_grp, pHash, hlen, &ctx.private_Q, &r, &s) != 0)
+    int64_t start_verify = k_uptime_get();
+    for (int i = 0; i < ECDSA_PERF_LOOPS; i++)
     {
-        err = -1;
-        printf(" ecdsa verify failed\n");
-        goto exit_test;
+        if(mbedtls_ecdsa_verify(&ctx.private_grp, pHash, hlen, &ctx.private_Q, &r, &s) != 0)
+        {
+            err = -1;
+            printf(" ecdsa verify failed\n");
+            goto exit_test;
+        }
     }
+    int64_t end_verify = k_uptime_get();
+    uint32_t verify_ms = (uint32_t)(end_verify - start_verify);
+    if (verify_ms == 0) verify_ms = 1;
+
+    printf("curve %d: sign %d ops/s, verify %d ops/s (%d loops, sign %d ms, verify %d ms)\n",
+           curve, (int)(ECDSA_PERF_LOOPS * 1000ULL / sign_ms),
+           (int)(ECDSA_PERF_LOOPS * 1000ULL / verify_ms),
+           ECDSA_PERF_LOOPS, sign_ms, verify_ms);
 
 exit_test:
 

@@ -1218,7 +1218,7 @@ exit:
 
 int main(void)
 {
-
+    printf("start test\n");
 #if (DT_NODE_HAS_STATUS(DT_NODELABEL(cpu1), okay))
 #if defined(CONFIG_MBEDTLS_ECDSA_SECP256R1_SECP384R1_SM2_LINKEDSEMI_OTBN_ALT)
     if(ecdsa_test() !=0)

@@ -1,0 +1,29 @@
+/*
+ * CTF + UART tracing overlay for lsqsh_evb@smp_xip/lsqsh/smp
+ *
+ * 实际只有一个 uart1 可用，tracing 和早期 bootrom log 共用该串口。
+ * 关闭 shell/log 后，uart1 主要输出 CTF 二进制 tracing 数据。
+ * 波特率提高到 921600，降低同步 tracing 对业务线程的阻塞。
+ */
+
+/ {
+	chosen {
+		zephyr,tracing-uart = &uart1;
+	};
+};
+
+&uart1 {
+	current-speed = <921600>;
+	status = "okay";
+};
+
+/* UART4 loopback (TX-RX shorted on EVB) for interrupt storm / nested IRQ test */
+&uart4 {
+	current-speed = <921600>;
+	status = "okay";
+};
+
+/* Watchdog as a periodic IRQ source (priority 4) for multi-level nesting stress test */
+&sec_iwdg {
+	status = "okay";
+};

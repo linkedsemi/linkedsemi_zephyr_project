@@ -4,7 +4,7 @@
 #include "mbedtls/threading.h"
 
 int ecdsa_test(void);
-#if defined(CONFIG_MEBDTLS_LINKEDSEMI_OTBN_DELEGATION_CLIENT)
+#if defined(CONFIG_MBEDTLS_LINKEDSEMI_OTBN_DELEGATION_CLIENT)
 void mbedtls_ls_otbn_delegation_client_chanels_init(void);
 #else
 void mbedtls_ls_otbn_delegation_server_chanels_init(void);
