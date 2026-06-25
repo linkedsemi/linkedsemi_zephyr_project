@@ -1,0 +1,7 @@
+&dmac2 {
+    status = "okay";
+};
+
+&sha512 {
+    status = "disabled";
+};
