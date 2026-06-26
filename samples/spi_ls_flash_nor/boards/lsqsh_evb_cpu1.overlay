@@ -1,0 +1,14 @@
+&qspi2 {
+	status = "okay";
+	auto-wait-ready;
+	auto-wait-interval = <1000>;
+	//spi-ctrl-caps-mask = <0>;
+
+	flash2: flash2@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <DT_FREQ_M(50)>;
+		spi-max-buswidth = <4>;
+		status = "okay";
+	};
+};
