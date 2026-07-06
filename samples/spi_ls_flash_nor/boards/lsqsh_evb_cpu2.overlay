@@ -1,0 +1,70 @@
+&chosen {
+    zephyr,flash-controller = &qspi1;
+    zephyr,console = &uart5;
+    zephyr,shell-uart = &uart5;
+};
+&qspi2 {
+	status = "okay";
+	auto-wait-ready;
+	auto-wait-interval = <1000>;
+
+	flash2: flash2@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <DT_FREQ_M(50)>;
+		//spi-max-buswidth = <4>;
+		status = "okay";
+	};
+};
+
+
+&pinctrl {
+	/omit-if-no-ref/uart4_tx_pd11: uart4_tx_pd11 {
+	pinmux = <UART4_TXD_FUNC1_IDX09_PINMUX_PD(11)>;
+};
+
+	/omit-if-no-ref/uart4_rx_pd12: uart4_rx_pd12 {
+	pinmux = <UART4_RXD_FUNC1_IDX10_PINMUX_PD(12)>;
+	input-enable;
+};
+	/omit-if-no-ref/uart5_tx_pn14: uart5_tx_pn14 {
+	pinmux = <UART5_TXD_FUNC4_PN14_PINMUX>;
+};
+	/omit-if-no-ref/uart5_rx_pn13: uart5_rx_pn13 {
+	pinmux = <UART5_RXD_FUNC4_PN13_PINMUX>;
+	input-enable;
+};
+
+};
+
+&uart4 {
+	status = "disabled";
+	pinctrl-0 = <&uart4_tx_pd11 &uart4_rx_pd12>;
+	pinctrl-names = "default";
+};
+
+#if 1
+&uart5 {
+	status = "okay";
+	pinctrl-0 = <&uart5_tx_pn14 &uart5_rx_pn13>;
+	pinctrl-names = "default";
+};
+#endif
+
+#if 0
+#undef SRAM_TOTAL_SIZE
+#undef SRAM_RO_SIZE
+#undef SRAM_RW_SIZE
+
+#define SRAM_TOTAL_SIZE DT_SIZE_K(512 - 128)
+#define SRAM_RO_SIZE    DT_SIZE_K(256 - 128)
+#define SRAM_RW_SIZE    (SRAM_TOTAL_SIZE - SRAM_RO_SIZE)
+
+&sram_ro {
+    reg = <0x10020000 SRAM_RO_SIZE>;
+};
+
+&sram {
+    reg = <(0x10020000 + SRAM_RO_SIZE) SRAM_RW_SIZE>;
+};
+#endif
