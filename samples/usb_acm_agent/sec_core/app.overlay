@@ -1,16 +1,4 @@
-/ {
-	chosen {
-		zephyr,console = &vuart1;
-		zephyr,shell-uart = &vuart1;
-	};
-};
-
 &vuart1 {
     mbox = < &mbox_consumer_vuart1 >;
-    status = "okay";
-};
-
-&espi1 {
-    mbox = < &mbox_consumer_espi1 >;
     status = "okay";
 };
