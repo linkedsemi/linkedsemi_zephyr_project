@@ -14,7 +14,7 @@ int main(void)
 {
 	while (true) {
 		k_msleep(3000);
-		LOG_INF("hello world!!");
+		LOG_INF("sec core hello world!!");
 	}
 	return 0;
 }
