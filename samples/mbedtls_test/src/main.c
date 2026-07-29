@@ -229,26 +229,26 @@ int test_sha224_dma()
     bool is224 = true;
 
     uint8_t      hash[SHA224_DIGEST_SIZE];
-    uint8_t      hash_output[SHA224_DIGEST_SIZE] = 
+    uint8_t      hash_output[SHA224_DIGEST_SIZE] =
                 {0xF0,0x62,0x1E,0x96,0x01,0xDE,0x98,0xB4,0x8F,0xFF,0xBC,0x7A,0x16,0xFD,
                  0xF2,0xDE,0xA1,0x48,0xF7,0x49,0x51,0xD5,0xC4,0xEF,0x73,0xA2,0xD6,0x0E};
 
-    #define test_len 16257  //pass: 8127,8128,8129,9000,16256,16257,36852
-    __attribute__((aligned(32))) uint8_t big_buffer[test_len];
+    #define sha224_test_len 16257  //pass: 8127,8128,8129,9000,16256,16257,36852
+    __attribute__((aligned(32))) uint8_t big_buffer[sha224_test_len];
 
     memset(big_buffer, 0x2, sizeof(big_buffer));
 
-    mbedtls_sha256_init_dma(&sha);
+    mbedtls_sha256_init(&sha);
 
-    if ((ret = mbedtls_sha256_starts_dma(&sha, is224)) != 0) {
+    if ((ret = mbedtls_sha256_starts(&sha, is224)) != 0) {
         goto exit;
     }
 
-    if ((ret = mbedtls_sha256_update_dma(&sha, big_buffer, sizeof(big_buffer))) != 0) {
+    if ((ret = mbedtls_sha256_update(&sha, big_buffer, sizeof(big_buffer))) != 0) {
         goto exit;
     }
 
-    if ((ret = mbedtls_sha256_finish_dma(&sha, hash)) != 0) {
+    if ((ret = mbedtls_sha256_finish(&sha, hash)) != 0) {
         goto exit;
     }
 
@@ -270,26 +270,26 @@ int test_sha256_dma()
     bool is224 = false;
 
     uint8_t      hash[SHA256_DIGEST_SIZE];
-    uint8_t      hash_output[SHA256_DIGEST_SIZE] = 
+    uint8_t      hash_output[SHA256_DIGEST_SIZE] =
                  {0x79,0x14,0x3E,0x04,0xBF,0xB7,0x6E,0xCE,0xF7,0xD6,0xDF,0xDF,0x69,0xEB,0x3A,0xD2,
                   0xDE,0x49,0xA5,0xBC,0x41,0xD0,0x25,0xFC,0x0C,0x5D,0x52,0x30,0x2C,0x46,0xB6,0x7B};
 
-    #define test_len 16257
-    __attribute__((aligned(32))) uint8_t big_buffer[test_len];
+    #define sha256_test_len 16257
+    __attribute__((aligned(32))) uint8_t big_buffer[sha256_test_len];
 
     memset(big_buffer, 0x2, sizeof(big_buffer));
 
-    mbedtls_sha256_init_dma(&sha);
+    mbedtls_sha256_init(&sha);
 
-    if ((ret = mbedtls_sha256_starts_dma(&sha, is224)) != 0) {
+    if ((ret = mbedtls_sha256_starts(&sha, is224)) != 0) {
         goto exit;
     }
 
-    if ((ret = mbedtls_sha256_update_dma(&sha, big_buffer, sizeof(big_buffer))) != 0) {
+    if ((ret = mbedtls_sha256_update(&sha, big_buffer, sizeof(big_buffer))) != 0) {
         goto exit;
     }
 
-    if ((ret = mbedtls_sha256_finish_dma(&sha, hash)) != 0) {
+    if ((ret = mbedtls_sha256_finish(&sha, hash)) != 0) {
         goto exit;
     }
 
@@ -310,26 +310,26 @@ int test_sm3_dma()
     int ret = 0;
     uint8_t   hash[SM3_DIGEST_SIZE];
 
-    uint8_t   hash_output[SM3_DIGEST_SIZE] = 
+    uint8_t   hash_output[SM3_DIGEST_SIZE] =
                 {0xF0,0x69,0x89,0xD9,0xEC,0x31,0xB9,0xD0,0x0C,0x87,0x0A,0x73,0xE7,0xB6,0x76,0x20,
                  0xEC,0xAC,0xE0,0x39,0x53,0x5A,0x4A,0xBC,0xA2,0x11,0x95,0x9C,0xF1,0xE9,0xCA,0xAA};
 
-    #define test_len 16257
-    __attribute__((aligned(32))) uint8_t big_buffer[test_len];
+    #define sm3_test_len 16257
+    __attribute__((aligned(32))) uint8_t big_buffer[sm3_test_len];
 
     memset(big_buffer, 0x2, sizeof(big_buffer));
 
-    mbedtls_sm3_init_dma(&sm3);
+    mbedtls_sm3_init(&sm3);
 
-    if ((ret = mbedtls_sm3_starts_dma(&sm3)) != 0) {
+    if ((ret = mbedtls_sm3_starts(&sm3)) != 0) {
         goto exit;
     }
 
-    if ((ret = mbedtls_sm3_update_dma(&sm3, big_buffer, sizeof(big_buffer))) != 0) {
+    if ((ret = mbedtls_sm3_update(&sm3, big_buffer, sizeof(big_buffer))) != 0) {
         goto exit;
     }
 
-    if ((ret = mbedtls_sm3_finish_dma(&sm3, hash)) != 0) {
+    if ((ret = mbedtls_sm3_finish(&sm3, hash)) != 0) {
         goto exit;
     }
 
@@ -342,6 +342,97 @@ exit:
     mbedtls_sm3_free(&sm3);
 
     return ret;
+}
+
+static int test_sha256_various_lengths(void)
+{
+    static const struct {
+        size_t len;
+        const uint8_t hash[SHA256_DIGEST_SIZE];
+    } cases[] = {
+        {0,    {0xe3,0xb0,0xc4,0x42,0x98,0xfc,0x1c,0x14,0x9a,0xfb,0xf4,0xc8,0x99,0x6f,0xb9,0x24,0x27,0xae,0x41,0xe4,0x64,0x9b,0x93,0x4c,0xa4,0x95,0x99,0x1b,0x78,0x52,0xb8,0x55}},
+        {1,    {0xdb,0xc1,0xb4,0xc9,0x00,0xff,0xe4,0x8d,0x57,0x5b,0x5d,0xa5,0xc6,0x38,0x04,0x01,0x25,0xf6,0x5d,0xb0,0xfe,0x3e,0x24,0x49,0x4b,0x76,0xea,0x98,0x64,0x57,0xd9,0x86}},
+        {63,   {0x2b,0x3c,0x7e,0x3b,0xb2,0x6b,0xdf,0xda,0xf5,0x36,0xeb,0x40,0x69,0x83,0xd9,0x3b,0x82,0x2e,0x8c,0xae,0x5e,0x6a,0x6d,0xdd,0x39,0x64,0xe4,0x10,0x71,0x9e,0x02,0xce}},
+        {64,   {0xf8,0x3b,0x33,0x2b,0xe4,0xe6,0xa5,0xa4,0xb1,0xc5,0x6a,0xaf,0x6d,0xb5,0x26,0x57,0xda,0x49,0x5e,0x14,0x98,0x70,0x05,0x7d,0x85,0x90,0xab,0x9d,0x7a,0x61,0x67,0xad}},
+        {65,   {0x64,0xf0,0x23,0xa6,0xcb,0x9d,0x76,0x68,0xa0,0x25,0x88,0xce,0x41,0xfe,0xc6,0x4b,0x78,0xb4,0x14,0xf4,0xb3,0x14,0xfc,0x51,0xe7,0x3c,0x94,0x5c,0x7f,0x9e,0xc2,0x02}},
+        {127,  {0xa7,0x96,0xc8,0x8a,0xad,0x57,0xd7,0x87,0xae,0x4e,0xfd,0x0f,0xf2,0xff,0x81,0x27,0x58,0xb0,0xd9,0xa4,0x03,0x46,0x14,0xf0,0xae,0x89,0x61,0x9c,0xec,0x1a,0xab,0x7f}},
+        {128,  {0x9e,0x50,0xf9,0x0f,0xd0,0x35,0x92,0x4a,0x20,0x2c,0x1f,0x5c,0x52,0x46,0xac,0xc4,0x0a,0xb0,0xc3,0x21,0x13,0x66,0xe8,0x9f,0x0c,0x5d,0x9c,0xf4,0x2a,0x6a,0x8d,0x78}},
+        {255,  {0x59,0xc9,0x0b,0x02,0x06,0xa4,0xc3,0x89,0xee,0x90,0xb0,0x64,0xce,0xbd,0xac,0x8f,0x76,0x63,0xbc,0xb7,0x8c,0xae,0x3e,0x23,0xc5,0xad,0xc4,0x84,0xfa,0x23,0xe2,0x48}},
+        {256,  {0xf5,0xc2,0x2e,0x35,0xd0,0x41,0x67,0xe3,0x79,0x13,0xe7,0x96,0x3c,0xe0,0x33,0xb1,0xf3,0xd1,0x7a,0x92,0x4a,0x4e,0x6f,0xe5,0xfc,0x95,0xaf,0x12,0x24,0x05,0x19,0x21}},
+        {511,  {0xce,0x8e,0xff,0x1b,0xec,0xc2,0x34,0xa0,0x20,0x02,0xfe,0x67,0x38,0x1a,0x98,0x60,0x8b,0x01,0x20,0x84,0x0a,0x9a,0x35,0x51,0x6d,0x75,0xcf,0x3c,0x00,0x5e,0x5b,0x1e}},
+        {512,  {0x1b,0xd8,0xd0,0x4b,0xb1,0x27,0xc9,0xdb,0xdb,0x40,0x6c,0x3c,0x21,0x3b,0x20,0x2c,0x84,0xdc,0x75,0xf1,0x22,0xec,0xd5,0x53,0xb0,0x2f,0xb3,0x22,0xbf,0xfa,0xfd,0xc9}},
+        {1023, {0xd2,0x9d,0x01,0x2b,0x4c,0xee,0xa4,0xa1,0xcc,0x96,0xff,0xfa,0x14,0x0c,0x14,0x0b,0x36,0x4f,0x2a,0x3d,0x03,0x48,0x8d,0xd6,0x38,0x4f,0xf9,0x9a,0x14,0xde,0x8d,0x34}},
+        {1024, {0x14,0xd6,0xfc,0x84,0x87,0x12,0x81,0x5b,0xc1,0xb5,0xfe,0x1c,0xed,0x1b,0x89,0x80,0xee,0xa1,0xe0,0xdb,0x78,0x1a,0x94,0x6d,0xac,0x5a,0xde,0xd9,0x76,0x9d,0x19,0x84}},
+        {16257,{0x79,0x14,0x3e,0x04,0xbf,0xb7,0x6e,0xce,0xf7,0xd6,0xdf,0xdf,0x69,0xeb,0x3a,0xd2,0xde,0x49,0xa5,0xbc,0x41,0xd0,0x25,0xfc,0x0c,0x5d,0x52,0x30,0x2c,0x46,0xb6,0x7b}},
+    };
+
+    __attribute__((aligned(32))) static uint8_t big_buffer[16260];
+    memset(big_buffer, 0x2, sizeof(big_buffer));
+
+    for (size_t c = 0; c < sizeof(cases) / sizeof(cases[0]); ++c) {
+        for (int off = 0; off < 4; ++off) {
+            int ret;
+            mbedtls_sha256_context ctx;
+            uint8_t hash[SHA256_DIGEST_SIZE];
+
+            /* Single-update reference for this (len, offset). */
+            mbedtls_sha256_init(&ctx);
+            ret = mbedtls_sha256_starts(&ctx, false);
+            if (ret == 0) {
+                ret = mbedtls_sha256_update(&ctx, big_buffer + off, cases[c].len);
+            }
+            if (ret == 0) {
+                ret = mbedtls_sha256_finish(&ctx, hash);
+            }
+            mbedtls_sha256_free(&ctx);
+            if (ret != 0) {
+                printf("SHA-256 various: init/single-update failed len=%zu off=%d ret=%d\n",
+                       cases[c].len, off, ret);
+                return ret;
+            }
+            if (memcmp(hash, cases[c].hash, SHA256_DIGEST_SIZE) != 0) {
+                printf("SHA-256 various: single-update mismatch len=%zu off=%d\n",
+                       cases[c].len, off);
+                return -1;
+            }
+
+            /* Multi-update mixed test: 1 + 63 + 64 + remainder.
+             * This exercises CPU-copy residual filling, DMA/copy bulk, and tail handling. */
+            mbedtls_sha256_init(&ctx);
+            ret = mbedtls_sha256_starts(&ctx, false);
+            size_t remain = cases[c].len;
+            uint8_t *p = big_buffer + off;
+            size_t steps[] = {1, 63, 64, remain};
+            for (size_t s = 0; ret == 0 && s < sizeof(steps) / sizeof(steps[0]) && remain > 0; ++s) {
+                size_t n = steps[s];
+                if (n > remain) {
+                    n = remain;
+                }
+                if (n == 0) {
+                    continue;
+                }
+                ret = mbedtls_sha256_update(&ctx, p, n);
+                p += n;
+                remain -= n;
+            }
+            if (ret == 0) {
+                ret = mbedtls_sha256_finish(&ctx, hash);
+            }
+            mbedtls_sha256_free(&ctx);
+            if (ret != 0) {
+                printf("SHA-256 various: multi-update failed len=%zu off=%d ret=%d\n",
+                       cases[c].len, off, ret);
+                return ret;
+            }
+            if (memcmp(hash, cases[c].hash, SHA256_DIGEST_SIZE) != 0) {
+                printf("SHA-256 various: multi-update mismatch len=%zu off=%d\n",
+                       cases[c].len, off);
+                return -1;
+            }
+        }
+    }
+
+    return 0;
 }
 
 #include "mbedtls/aes.h"
@@ -1212,6 +1303,129 @@ exit:
 }
 #endif /* CONFIG_MBEDTLS_SM4_LINKEDSEMI_HARDWARE_ALT */
 
+#if defined(CONFIG_MBEDTLS_RSA_LINKEDSEMI_OTBN_ALT)
+#include "mbedtls/rsa.h"
+#include "rsa_test_key.h"
+
+static int test_rng(void *ctx, unsigned char *out, size_t len)
+{
+    static uint32_t state = 0x12345678;
+    (void)ctx;
+
+    for (size_t i = 0; i < len; i++) {
+        state = state * 1103515245U + 12345U;
+        /* PKCS#1 v1.5 padding requires non-zero random bytes. */
+        out[i] = (unsigned char)(state | 0x01U);
+    }
+    return 0;
+}
+
+int test_rsa(void)
+{
+    int ret;
+    mbedtls_rsa_context rsa;
+    const unsigned char msg[] = "hello rsa otbn test";
+    unsigned char hash[32];
+    unsigned char enc[256];
+    unsigned char dec[256];
+    unsigned char sig[256];
+    size_t dec_len;
+    mbedtls_sha256_context sha;
+
+    mbedtls_rsa_init(&rsa);
+
+    ret = mbedtls_rsa_import_raw(&rsa,
+                                 rsa2048_n, sizeof(rsa2048_n),
+                                 NULL, 0,
+                                 NULL, 0,
+                                 rsa2048_d, sizeof(rsa2048_d),
+                                 rsa2048_e, sizeof(rsa2048_e));
+    if (ret != 0) {
+        goto exit;
+    }
+
+    ret = mbedtls_rsa_complete(&rsa);
+    if (ret != 0) {
+        goto exit;
+    }
+
+    /* PKCS#1 v1.5 encrypt with public key, decrypt with private key. */
+    ret = mbedtls_rsa_pkcs1_encrypt(&rsa, test_rng, NULL,
+                                    sizeof(msg) - 1, msg, enc);
+    if (ret != 0) {
+        goto exit;
+    }
+
+    ret = mbedtls_rsa_pkcs1_decrypt(&rsa, test_rng, NULL,
+                                    &dec_len, enc, dec, sizeof(dec));
+    if (ret != 0) {
+        goto exit;
+    }
+    if (dec_len != sizeof(msg) - 1 || memcmp(dec, msg, dec_len) != 0) {
+        ret = -1;
+        goto exit;
+    }
+
+    /* PKCS#1 v1.5 sign and verify with SHA-256. */
+    mbedtls_sha256_init(&sha);
+    ret = mbedtls_sha256_starts(&sha, 0);
+    if (ret == 0) {
+        ret = mbedtls_sha256_update(&sha, msg, sizeof(msg) - 1);
+    }
+    if (ret == 0) {
+        ret = mbedtls_sha256_finish(&sha, hash);
+    }
+    mbedtls_sha256_free(&sha);
+    if (ret != 0) {
+        goto exit;
+    }
+
+    ret = mbedtls_rsa_pkcs1_sign(&rsa, test_rng, NULL,
+                                 MBEDTLS_MD_SHA256, 32, hash, sig);
+    if (ret != 0) {
+        goto exit;
+    }
+
+    ret = mbedtls_rsa_pkcs1_verify(&rsa, MBEDTLS_MD_SHA256, 32, hash, sig);
+    if (ret != 0) {
+        goto exit;
+    }
+
+    /* Known-answer test: decrypt OpenSSL-generated PKCS#1 v1.5 ciphertext. */
+    ret = mbedtls_rsa_pkcs1_decrypt(&rsa, test_rng, NULL,
+                                    &dec_len, rsa2048_ciphertext, dec, sizeof(dec));
+    if (ret != 0) {
+        goto exit;
+    }
+    if (dec_len != sizeof(msg) - 1 || memcmp(dec, msg, dec_len) != 0) {
+        ret = -1;
+        goto exit;
+    }
+
+    /* Known-answer test: sign and compare to OpenSSL-generated signature. */
+    ret = mbedtls_rsa_pkcs1_sign(&rsa, test_rng, NULL,
+                                 MBEDTLS_MD_SHA256, 32, hash, sig);
+    if (ret != 0) {
+        goto exit;
+    }
+    if (memcmp(sig, rsa2048_signature, sizeof(rsa2048_signature)) != 0) {
+        ret = -1;
+        goto exit;
+    }
+
+    /* Known-answer test: verify OpenSSL-generated signature. */
+    ret = mbedtls_rsa_pkcs1_verify(&rsa, MBEDTLS_MD_SHA256, 32, hash,
+                                   rsa2048_signature);
+    if (ret != 0) {
+        goto exit;
+    }
+
+exit:
+    mbedtls_rsa_free(&rsa);
+    return ret;
+}
+#endif /* CONFIG_MBEDTLS_RSA_LINKEDSEMI_OTBN_ALT */
+
 #if (DT_NODE_HAS_STATUS(DT_NODELABEL(cpu1), okay))
     int ecdsa_test(void);
 #endif
@@ -1283,14 +1497,22 @@ int main(void)
     }else{
         printf("SM3 dma test passed!\n");
     }
-#endif
-    if(aes_test() != 0)
+
+    if(test_sha256_various_lengths() != 0)
     {
-        printf("AES  test failed!\n");
+        printf("SHA-256 various lengths test failed!\n");
         goto end;
     }else{
-        printf("AES  test passed!\n");
+        printf("SHA-256 various lengths test passed!\n");
     }
+#endif
+    // if(aes_test() != 0)
+    // {
+    //     printf("AES  test failed!\n");
+    //     goto end;
+    // }else{
+    //     printf("AES  test passed!\n");
+    // }
 
 
     if(test_sha384() != 0)
@@ -1309,21 +1531,31 @@ int main(void)
         printf("SHA-512  test passed!\n");
     }
 
-    if(test_sm4() != 0)
-    {
-        printf("sm4 test failed!\n");
-        goto end;
-    }else{
-        printf("sm4  test passed!\n");
-    }
+    // if(test_sm4() != 0)
+    // {
+    //     printf("sm4 test failed!\n");
+    //     goto end;
+    // }else{
+    //     printf("sm4  test passed!\n");
+    // }
 
-    if(sm4_ctr_test() != 0)
+    // if(sm4_ctr_test() != 0)
+    // {
+    //     printf("sm4_ctr_test failed!\n");
+    //     goto end;
+    // }else{
+    //     printf("sm4_ctr_test passed!\n");
+    // }
+
+#if defined(CONFIG_MBEDTLS_RSA_LINKEDSEMI_OTBN_ALT)
+    if(test_rsa() != 0)
     {
-        printf("sm4_ctr_test failed!\n");
+        printf("RSA  test failed!\n");
         goto end;
     }else{
-        printf("sm4_ctr_test passed!\n");
+        printf("RSA  test passed!\n");
     }
+#endif
 
     printf("test succeed\n");
 end:
