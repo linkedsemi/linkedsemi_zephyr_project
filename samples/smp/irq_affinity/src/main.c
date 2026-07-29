@@ -16,8 +16,8 @@
 #define TEST_IRQ    GPTIMA1_IRQN
 #define TEST_PRIO   1
 
-extern void lsqsh_clic_irq_set_pending(uint32_t irq);
-extern void lsqsh_clic_irq_disable_trigger_mode(uint32_t irq);
+extern void riscv_clic_irq_set_pending(uint32_t irq);
+extern void riscv_clic_irq_disable_trigger_mode(uint32_t irq);
 
 static atomic_t isr_count[CONFIG_MP_MAX_NUM_CPUS];
 
@@ -35,7 +35,7 @@ static void test_isr(const void *arg)
 	 * Restore level-triggered mode before clearing pending, matching the
 	 * UART driver pattern.
 	 */
-	lsqsh_clic_irq_disable_trigger_mode(TEST_IRQ);
+	riscv_clic_irq_disable_trigger_mode(TEST_IRQ);
 	csi_vic_clear_pending_irq(TEST_IRQ);
 }
 
@@ -81,10 +81,10 @@ static void clear_pending_thread_fn(void *p1, void *p2, void *p3)
 	ARG_UNUSED(p2);
 	ARG_UNUSED(p3);
 
-	/* The CLIC pending bit set by lsqsh_clic_irq_set_pending() is edge
+	/* The CLIC pending bit set by riscv_clic_irq_set_pending() is edge
 	 * triggered; restore level mode before clearing, just like the ISR does.
 	 */
-	lsqsh_clic_irq_disable_trigger_mode(TEST_IRQ);
+	riscv_clic_irq_disable_trigger_mode(TEST_IRQ);
 	csi_vic_clear_pending_irq(TEST_IRQ);
 }
 
@@ -136,7 +136,7 @@ static void trigger_thread_fn(void *p1, void *p2, void *p3)
 	__ASSERT(arch_curr_cpu()->id == (uint32_t)target_cpu,
 		 "trigger thread not on target CPU");
 
-	lsqsh_clic_irq_set_pending(TEST_IRQ);
+	riscv_clic_irq_set_pending(TEST_IRQ);
 
 	/* Small delay to let the ISR run before the thread exits. */
 	k_busy_wait(500);
