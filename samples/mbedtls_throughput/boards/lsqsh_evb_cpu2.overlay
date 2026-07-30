@@ -1,0 +1,11 @@
+&sha512 {
+    status = "okay";
+};
+
+&sha256 {
+    status = "okay";
+};
+
+&dmac2 {
+    status = "okay";
+};
