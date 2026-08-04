@@ -1,6 +1,9 @@
 #include <string.h>
 #include <stdio.h>
 
+#include <zephyr/device.h>
+#include <zephyr/drivers/entropy.h>
+
 #include "mbedtls/threading.h"
 
 typedef struct testVector {
@@ -1307,6 +1310,38 @@ exit:
 #include "mbedtls/rsa.h"
 #include "rsa_test_key.h"
 
+static const struct device *trng_dev;
+
+static int trng_init(void)
+{
+    if (trng_dev != NULL) {
+        return 0;
+    }
+
+    trng_dev = DEVICE_DT_GET(DT_NODELABEL(trng1));
+    if (!device_is_ready(trng_dev)) {
+        printf("TRNG device not ready\n");
+        trng_dev = NULL;
+        return -ENODEV;
+    }
+
+    return 0;
+}
+
+static int rsa_keygen_get_rng(void *ctx, unsigned char *buf, size_t len)
+{
+    int rc;
+
+    (void)ctx;
+
+    if (trng_init() != 0) {
+        return -ENODEV;
+    }
+
+    rc = entropy_get_entropy_isr(trng_dev, buf, len, ENTROPY_BUSYWAIT);
+    return (rc < 0) ? rc : 0;
+}
+
 static int test_rng(void *ctx, unsigned char *out, size_t len)
 {
     static uint32_t state = 0x12345678;
@@ -1320,6 +1355,62 @@ static int test_rng(void *ctx, unsigned char *out, size_t len)
     return 0;
 }
 
+static int test_rsa_keygen_size(unsigned int nbits)
+{
+    int ret;
+    mbedtls_rsa_context rsa;
+    unsigned char hash[32];
+    unsigned char sig[512];
+    mbedtls_sha256_context sha;
+    const unsigned char msg[] = "hello rsa otbn test";
+
+    mbedtls_rsa_init(&rsa);
+
+    ret = mbedtls_rsa_gen_key(&rsa, rsa_keygen_get_rng, NULL, nbits, 65537);
+    if (ret != 0) {
+        printf("RSA-%u keygen: mbedtls_rsa_gen_key failed ret=%d\n", nbits, ret);
+        goto exit;
+    }
+
+    ret = mbedtls_rsa_check_privkey(&rsa);
+    if (ret != 0) {
+        printf("RSA-%u keygen: check_privkey failed ret=%d\n", nbits, ret);
+        goto exit;
+    }
+
+    mbedtls_sha256_init(&sha);
+    ret = mbedtls_sha256_starts(&sha, 0);
+    if (ret == 0) {
+        ret = mbedtls_sha256_update(&sha, msg, sizeof(msg) - 1);
+    }
+    if (ret == 0) {
+        ret = mbedtls_sha256_finish(&sha, hash);
+    }
+    mbedtls_sha256_free(&sha);
+    if (ret != 0) {
+        goto exit;
+    }
+
+    ret = mbedtls_rsa_pkcs1_sign(&rsa, test_rng, NULL,
+                                 MBEDTLS_MD_SHA256, 32, hash, sig);
+    if (ret != 0) {
+        printf("RSA-%u keygen: sign failed ret=%d\n", nbits, ret);
+        goto exit;
+    }
+
+    ret = mbedtls_rsa_pkcs1_verify(&rsa, MBEDTLS_MD_SHA256, 32, hash, sig);
+    if (ret != 0) {
+        printf("RSA-%u keygen: verify failed ret=%d\n", nbits, ret);
+        goto exit;
+    }
+
+    printf("RSA-%u keygen: passed\n", nbits);
+
+exit:
+    mbedtls_rsa_free(&rsa);
+    return ret;
+}
+
 int test_rsa(void)
 {
     int ret;
@@ -1328,7 +1419,7 @@ int test_rsa(void)
     unsigned char hash[32];
     unsigned char enc[256];
     unsigned char dec[256];
-    unsigned char sig[256];
+    unsigned char sig[512];
     size_t dec_len;
     mbedtls_sha256_context sha;
 
@@ -1418,6 +1509,20 @@ int test_rsa(void)
                                    rsa2048_signature);
     if (ret != 0) {
         goto exit;
+    }
+
+    mbedtls_rsa_free(&rsa);
+
+    /* OTBN RSA key generation test for 2048/3072/4096 (only F4 exponent). */
+    {
+        static const unsigned int keygen_sizes[] = {2048, 3072, 4096};
+
+        for (size_t i = 0; i < sizeof(keygen_sizes) / sizeof(keygen_sizes[0]); i++) {
+            ret = test_rsa_keygen_size(keygen_sizes[i]);
+            if (ret != 0) {
+                goto exit;
+            }
+        }
     }
 
 exit:

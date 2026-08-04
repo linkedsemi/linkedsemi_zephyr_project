@@ -1,3 +1,7 @@
+&chosen {
+    zephyr,entropy = &trng1;
+};
+
 &sha512 {
     status = "okay";
 };
@@ -7,5 +11,9 @@
 };
 
 &dmac2 {
+    status = "okay";
+};
+
+&trng1 {
     status = "okay";
 };

@@ -22,6 +22,9 @@
 #if defined(MBEDTLS_RSA_C)
 #include "mbedtls/rsa.h"
 #include "rsa_test_key.h"
+#include <zephyr/drivers/entropy.h>
+#include <zephyr/device.h>
+#include "ls_otbn_config.h"
 #endif
 #if defined(CONFIG_MBEDTLS_SM4_LINKEDSEMI_HARDWARE_ALT)
 #include "mbedtls/sm4_alt.h"
@@ -1358,15 +1361,189 @@ static int test_mbedtls_ecdsa_sm2(void)
 #if defined(MBEDTLS_RSA_C)
 #define RSA_PERF_LOOPS 10
 
+static const struct device *trng_dev;
+
+/* RNG profiling counters (valid while rng_profiling is true) */
+static volatile int rng_profiling;
+
+static uint32_t sw_rng_call_cnt;
+static uint32_t sw_rng_byte_cnt;
+static uint64_t sw_rng_cycles;
+
+#if defined(CONFIG_MBEDTLS_RSA_LINKEDSEMI_OTBN_ALT)
+static uint32_t otbn_rnd_cnt;
+static uint32_t otbn_urnd_cnt;
+static uint64_t otbn_rnd_cycles;
+static uint64_t otbn_urnd_cycles;
+#endif
+
+static int trng_init(void)
+{
+    if (trng_dev != NULL) {
+        return 0;
+    }
+
+    trng_dev = DEVICE_DT_GET(DT_NODELABEL(trng1));
+    if (!device_is_ready(trng_dev)) {
+        printk("TRNG device not ready\n");
+        trng_dev = NULL;
+        return -ENODEV;
+    }
+
+    return 0;
+}
+
+static void rng_profiling_reset(void)
+{
+    sw_rng_call_cnt = 0;
+    sw_rng_byte_cnt = 0;
+    sw_rng_cycles = 0;
+#if defined(CONFIG_MBEDTLS_RSA_LINKEDSEMI_OTBN_ALT)
+    otbn_rnd_cnt = 0;
+    otbn_urnd_cnt = 0;
+    otbn_rnd_cycles = 0;
+    otbn_urnd_cycles = 0;
+#endif
+}
+
+static void rng_profiling_print(void)
+{
+    uint32_t cpu_freq_hz = sys_clock_hw_cycles_per_sec();
+
+    printk("    SW RNG: calls=%u bytes=%u cycles=%llu time=%llu ms\n",
+           sw_rng_call_cnt, sw_rng_byte_cnt, sw_rng_cycles,
+           (sw_rng_cycles * 1000ULL) / cpu_freq_hz);
+#if defined(CONFIG_MBEDTLS_RSA_LINKEDSEMI_OTBN_ALT)
+    printk("    OTBN RND: calls=%u cycles=%llu time=%llu ms\n",
+           otbn_rnd_cnt, otbn_rnd_cycles,
+           (otbn_rnd_cycles * 1000ULL) / cpu_freq_hz);
+    printk("    OTBN URND: calls=%u cycles=%llu time=%llu ms\n",
+           otbn_urnd_cnt, otbn_urnd_cycles,
+           (otbn_urnd_cycles * 1000ULL) / cpu_freq_hz);
+#endif
+}
+
 static int rsa_get_rng(void *ctx, unsigned char *buf, size_t len)
 {
+    int rc;
+    timing_t start_time, end_time;
+
     (void)ctx;
 
+    if (trng_init() != 0) {
+        return -ENODEV;
+    }
+
+    if (rng_profiling) {
+        start_time = timing_counter_get();
+    }
+
+    rc = entropy_get_entropy_isr(trng_dev, buf, len, ENTROPY_BUSYWAIT);
+
+    if (rng_profiling) {
+        end_time = timing_counter_get();
+        sw_rng_cycles += timing_cycles_get(&start_time, &end_time);
+        sw_rng_call_cnt++;
+        sw_rng_byte_cnt += (uint32_t)len;
+    }
+
+    if (rc < 0) {
+        return rc;
+    }
+
+    /* PKCS#1 v1.5 padding requires non-zero random bytes. */
     for (size_t i = 0; i < len; i++) {
-        buf[i] = (unsigned char)(i + 1);
+        buf[i] |= 0x01U;
     }
     return 0;
 }
+
+static int rsa_keygen_get_rng(void *ctx, unsigned char *buf, size_t len)
+{
+    int rc;
+    timing_t start_time, end_time;
+
+    (void)ctx;
+
+    if (trng_init() != 0) {
+        return -ENODEV;
+    }
+
+    if (rng_profiling) {
+        start_time = timing_counter_get();
+    }
+
+    rc = entropy_get_entropy_isr(trng_dev, buf, len, ENTROPY_BUSYWAIT);
+
+    if (rng_profiling) {
+        end_time = timing_counter_get();
+        sw_rng_cycles += timing_cycles_get(&start_time, &end_time);
+        sw_rng_call_cnt++;
+        sw_rng_byte_cnt += (uint32_t)len;
+    }
+
+    return (rc < 0) ? rc : 0;
+}
+
+#if defined(CONFIG_MBEDTLS_RSA_LINKEDSEMI_OTBN_ALT)
+static uint32_t otbn_trng_get(void)
+{
+    uint32_t val = 0;
+    timing_t start_time, end_time;
+
+    if (trng_dev == NULL) {
+        (void)trng_init();
+    }
+
+    if (trng_dev == NULL) {
+        return 0;
+    }
+
+    if (rng_profiling) {
+        start_time = timing_counter_get();
+    }
+
+    (void)entropy_get_entropy_isr(trng_dev, (uint8_t *)&val,
+                                  sizeof(val), ENTROPY_BUSYWAIT);
+
+    if (rng_profiling) {
+        end_time = timing_counter_get();
+        otbn_rnd_cycles += timing_cycles_get(&start_time, &end_time);
+        otbn_rnd_cnt++;
+    }
+
+    return val;
+}
+
+static uint32_t otbn_prng_get(void)
+{
+    uint32_t val = 0;
+    timing_t start_time, end_time;
+
+    if (trng_dev == NULL) {
+        (void)trng_init();
+    }
+
+    if (trng_dev == NULL) {
+        return 0;
+    }
+
+    if (rng_profiling) {
+        start_time = timing_counter_get();
+    }
+
+    (void)entropy_get_entropy_isr(trng_dev, (uint8_t *)&val,
+                                  sizeof(val), ENTROPY_BUSYWAIT);
+
+    if (rng_profiling) {
+        end_time = timing_counter_get();
+        otbn_urnd_cycles += timing_cycles_get(&start_time, &end_time);
+        otbn_urnd_cnt++;
+    }
+
+    return val;
+}
+#endif /* CONFIG_MBEDTLS_RSA_LINKEDSEMI_OTBN_ALT */
 
 static int test_mbedtls_rsa_2048(void)
 {
@@ -1484,6 +1661,47 @@ exit:
     mbedtls_rsa_free(&rsa);
     return ret;
 }
+
+#if defined(MBEDTLS_GENPRIME)
+#define RSA_KEYGEN_LOOPS 10
+
+static int test_mbedtls_rsa_keygen(void)
+{
+    mbedtls_rsa_context rsa;
+    int64_t start, end;
+    uint32_t ms;
+    int err;
+    int ret = 0;
+
+    printk("  RSA-2048 keygen (%d loops)\n", RSA_KEYGEN_LOOPS);
+
+    for (int i = 0; i < RSA_KEYGEN_LOOPS; i++) {
+        mbedtls_rsa_init(&rsa);
+        rng_profiling_reset();
+        rng_profiling = 1;
+        start = k_uptime_get();
+        err = mbedtls_rsa_gen_key(&rsa, rsa_keygen_get_rng, NULL, 2048, 65537);
+        end = k_uptime_get();
+        rng_profiling = 0;
+        if (err != 0) {
+            printk("  RSA-2048 keygen loop %d error: %d\n", i + 1, err);
+            ret = err;
+            goto exit;
+        }
+        ms = (uint32_t)(end - start);
+        if (ms == 0) {
+            ms = 1;
+        }
+        printk("  RSA-2048 keygen loop %d: %d ms\n", i + 1, ms);
+        rng_profiling_print();
+        mbedtls_rsa_free(&rsa);
+    }
+
+exit:
+    mbedtls_rsa_free(&rsa);
+    return ret;
+}
+#endif /* MBEDTLS_GENPRIME */
 #endif /* MBEDTLS_RSA_C */
 
 int main(void)
@@ -1581,8 +1799,14 @@ int main(void)
 #endif
 
 #if defined(MBEDTLS_RSA_C)
+#if defined(CONFIG_MBEDTLS_RSA_LINKEDSEMI_OTBN_ALT)
+    ls_otbn_random_callback_register(otbn_trng_get, otbn_prng_get);
+#endif
     printk("\nmbedtls RSA-2048 throughput (%d loops)\n", RSA_PERF_LOOPS);
     test_mbedtls_rsa_2048();
+#if defined(MBEDTLS_GENPRIME)
+    test_mbedtls_rsa_keygen();
+#endif
 #endif
 
     return 0;
