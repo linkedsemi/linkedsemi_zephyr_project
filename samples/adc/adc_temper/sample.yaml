@@ -1,0 +1,15 @@
+sample:
+  description: ADC built-in temperature sensor sample
+  name: adc_temper
+common:
+  tags: introduction
+  integration_platforms:
+    - native_sim
+  harness: console
+  harness_config:
+    type: one_line
+    regex:
+      - "start adc temper test! (.*)"
+tests:
+  sample.basic.helloworld:
+    tags: introduction
