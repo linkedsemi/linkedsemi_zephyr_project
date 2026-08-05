@@ -1,120 +1,130 @@
 mbedtls SHA256 throughput (total 256 KB)
 Step(KB)   Time(us)   MB/s
-      1     78214      3.19
-      2     66218      3.77
-      4     60959      4.10
-      8     61751      4.04
-     16     58169      4.29
-     32     60733      4.11
-     64     62347      4.00
-    128     61654      4.05
-    256     57076      4.38
-
-SHA256 hardware DMA alt is not enabled, skipped.
+      1     77410      3.22
+      2     63762      3.92
+      4     62273      4.01
+      8     59824      4.17
+     16     58786      4.25
+     32     58688      4.25
+     64     58024      4.30
+    128     60403      4.13
+    256     58490      4.27
 
 mbedtls SHA512 throughput (total 256 KB)
 Step(KB)   Time(us)   MB/s
-      1     78228      3.19
-      2     64605      3.86
-      4     62708      3.98
-      8     60638      4.12
-     16     59549      4.19
-     32     59061      4.23
-     64     58768      4.25
-    128     58631      4.26
-    256     58606      4.26
+      1     77199      3.23
+      2     64443      3.87
+      4     62432      4.00
+      8     60573      4.12
+     16     59501      4.20
+     32     58984      4.23
+     64     58713      4.25
+    128     58578      4.26
+    256     58382      4.28
 
 mbedtls SHA256 unaligned throughput (total 256 KB, +1 offset)
 Step(KB)   Time(us)   MB/s
-      1     75978      3.29
-      2     64154      3.89
-      4     62242      4.01
-      8     60081      4.16
-     16     58915      4.24
-     32     58349      4.28
-     64     58079      4.30
-    128     57912      4.31
-    256     57865      4.32
+      1     76583      3.26
+      2     63908      3.91
+      4     61399      4.07
+      8     59779      4.18
+     16     58962      4.24
+     32     58550      4.26
+     64     58317      4.28
+    128     58281      4.28
+    256     57882      4.31
 
 mbedtls SHA512 unaligned throughput (total 256 KB, +1 offset)
 Step(KB)   Time(us)   MB/s
-      1     83465      2.99
-      2     66241      3.77
-      4     63374      3.94
-      8     61114      4.09
-     16     59756      4.18
-     32     59089      4.23
-     64     58754      4.25
-    128     58616      4.26
-    256     58507      4.27
+      1     76555      3.26
+      2     64980      3.84
+      4     62395      4.00
+      8     60725      4.11
+     16     59760      4.18
+     32     59262      4.21
+     64     58759      4.25
+    128     58969      4.23
+    256     59019      4.23
 
 mbedtls SM3 throughput (total 256 KB)
 Step(KB)   Time(us)   MB/s
-      1    152694      1.63
-      2    139909      1.78
-      4    138607      1.80
-      8    135948      1.83
-     16    134410      1.85
-     32    133776      1.86
-     64    133500      1.87
-    128    133298      1.87
-    256    133304      1.87
+      1    152836      1.63
+      2    140123      1.78
+      4    137404      1.81
+      8    135086      1.85
+     16    133411      1.87
+     32    132957      1.88
+     64    132722      1.88
+    128    132464      1.88
+    256    132464      1.88
 
 mbedtls SM3 unaligned throughput (total 256 KB, +1 offset)
 Step(KB)   Time(us)   MB/s
-      1    151802      1.64
-      2    139260      1.79
-      4    138146      1.80
-      8    135703      1.84
-     16    134403      1.86
-     32    133727      1.86
-     64    134380      1.86
-    128    133764      1.86
-    256    133302      1.87
+      1    152466      1.63
+      2    139811      1.78
+      4    136813      1.82
+      8    134620      1.85
+     16    133466      1.87
+     32    132902      1.88
+     64    132693      1.88
+    128    132507      1.88
+    256    132508      1.88
 
 mbedtls cipher throughput (total 256 KB, 5 runs)
-  AES-128 ECB encrypt:   1.68 MB/s (5 runs)
-  AES-128 ECB decrypt:   1.32 MB/s (5 runs)
-  AES-256 ECB encrypt:   1.06 MB/s (5 runs)
-  AES-256 ECB decrypt:   0.92 MB/s (5 runs)
-  AES-128 CBC encrypt:   1.90 MB/s (5 runs)
-  AES-128 CBC decrypt:   1.15 MB/s (5 runs)
-  AES-256 CBC encrypt:   1.50 MB/s (5 runs)
-  AES-256 CBC decrypt:   0.47 MB/s (5 runs)
-  AES-128 CTR encrypt:   1.77 MB/s (5 runs)
-  AES-128 CTR encrypt:   1.77 MB/s (5 runs)
-  AES-256 CTR encrypt:   1.42 MB/s (5 runs)
-  AES-256 CTR encrypt:   1.44 MB/s (5 runs)
-  AES-128 CFB128 encrypt:   1.84 MB/s (5 runs)
-  AES-128 CFB128 decrypt:   1.63 MB/s (5 runs)
-  AES-256 CFB128 encrypt:   1.46 MB/s (5 runs)
-  AES-256 CFB128 decrypt:   1.47 MB/s (5 runs)
-  AES-128 CFB8 encrypt:   0.06 MB/s (5 runs)
+  AES-128 ECB encrypt:   0.53 MB/s (5 runs)
+  AES-128 ECB decrypt:   1.18 MB/s (5 runs)
+  AES-256 ECB encrypt:   0.61 MB/s (5 runs)
+  AES-256 ECB decrypt:   1.20 MB/s (5 runs)
+  AES-128 CBC encrypt:   1.89 MB/s (5 runs)
+  AES-128 CBC decrypt:   1.61 MB/s (5 runs)
+  AES-256 CBC encrypt:   1.49 MB/s (5 runs)
+  AES-256 CBC decrypt:   1.05 MB/s (5 runs)
+  AES-128 CTR encrypt:   0.79 MB/s (5 runs)
+  AES-128 CTR encrypt:   1.66 MB/s (5 runs)
+  AES-256 CTR encrypt:   1.11 MB/s (5 runs)
+  AES-256 CTR encrypt:   1.11 MB/s (5 runs)
+  AES-128 CFB128 encrypt:   1.08 MB/s (5 runs)
+  AES-128 CFB128 decrypt:   1.86 MB/s (5 runs)
+  AES-256 CFB128 encrypt:   1.17 MB/s (5 runs)
+  AES-256 CFB128 decrypt:   1.37 MB/s (5 runs)
+  AES-128 CFB8 encrypt:   0.08 MB/s (5 runs)
   AES-128 CFB8 decrypt:   0.06 MB/s (5 runs)
   AES-256 CFB8 encrypt:   0.04 MB/s (5 runs)
   AES-256 CFB8 decrypt:   0.04 MB/s (5 runs)
-  AES-128 OFB encrypt:   1.75 MB/s (5 runs)
-  AES-128 OFB encrypt:   1.75 MB/s (5 runs)
-  AES-256 OFB encrypt:   1.40 MB/s (5 runs)
-  AES-256 OFB encrypt:   1.42 MB/s (5 runs)
-  AES-128 XTS encrypt:   1.66 MB/s (5 runs)
-  AES-128 XTS decrypt:   1.58 MB/s (5 runs)
-  AES-256 XTS encrypt:   1.33 MB/s (5 runs)
-  AES-256 XTS decrypt:   1.58 MB/s (5 runs)
+  AES-128 OFB encrypt:   1.69 MB/s (5 runs)
+  AES-128 OFB encrypt:   1.69 MB/s (5 runs)
+  AES-256 OFB encrypt:   1.13 MB/s (5 runs)
+  AES-256 OFB encrypt:   1.28 MB/s (5 runs)
+  AES-128 XTS encrypt:   0.99 MB/s (5 runs)
+  AES-128 XTS decrypt:   1.70 MB/s (5 runs)
+  AES-256 XTS encrypt:   1.29 MB/s (5 runs)
+  AES-256 XTS decrypt:   1.71 MB/s (5 runs)
 
 mbedtls ECDSA throughput (5 loops)
-  ECDSA P-384 keygen:  185 ops/s (5 loops, 27 ms)
-  ECDSA P-384 sign:    172 ops/s (5 loops, 29 ms)
+  ECDSA P-384 keygen:  178 ops/s (5 loops, 28 ms)
+  ECDSA P-384 sign:    178 ops/s (5 loops, 28 ms)
   ECDSA P-384 verify:  250 ops/s (5 loops, 20 ms)
-  ECDSA P-256 keygen:  454 ops/s (5 loops, 11 ms)
-  ECDSA P-256 sign:    384 ops/s (5 loops, 13 ms)
+  ECDSA P-256 keygen:  416 ops/s (5 loops, 12 ms)
+  ECDSA P-256 sign:    416 ops/s (5 loops, 12 ms)
   ECDSA P-256 verify:  625 ops/s (5 loops, 8 ms)
-  SM2 keygen:  333 ops/s (5 loops, 15 ms)
-  SM2 sign:    312 ops/s (5 loops, 16 ms)
-  SM2 verify:  172 ops/s (5 loops, 29 ms)
+  SM2 keygen:  357 ops/s (5 loops, 14 ms)
+  SM2 sign:    333 ops/s (5 loops, 15 ms)
+  SM2 verify:  178 ops/s (5 loops, 28 ms)
 
 mbedtls RSA-2048 throughput (10 loops)
-  RSA-2048 encrypt: 1111 ops/s (10 loops, 9 ms)
-  RSA-2048 decrypt:   11 ops/s (10 loops, 840 ms)
-  RSA-2048 sign:      12 ops/s (10 loops, 781 ms)
-  RSA-2048 verify:  1000 ops/s (10 loops, 10 ms)
+  RSA-2048 encrypt:  256 ops/s (10 loops, 39 ms)
+  RSA-2048 decrypt:   12 ops/s (10 loops, 821 ms)
+  RSA-2048 sign:      12 ops/s (10 loops, 809 ms)
+  RSA-2048 verify:   666 ops/s (10 loops, 15 ms)
+  RSA-2048 keygen (10 loops)
+  RSA-2048 keygen loop 1: 4279 ms
+  RSA-2048 keygen loop 2: 2018 ms
+  RSA-2048 keygen loop 3: 3733 ms
+  RSA-2048 keygen loop 4: 6190 ms
+  RSA-2048 keygen loop 5: 1110 ms
+  RSA-2048 keygen loop 6: 2415 ms
+  RSA-2048 keygen loop 7: 676 ms
+  RSA-2048 keygen loop 8: 6022 ms
+  RSA-2048 keygen loop 9: 6621 ms
+  RSA-2048 keygen loop 10: 1821 ms
+test end
