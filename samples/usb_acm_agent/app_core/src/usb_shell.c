@@ -22,12 +22,16 @@ static const struct device *agent_dev = DEVICE_DT_GET(AGENT_NODE);
 
 static struct k_work switch_local_work;
 static struct k_work switch_peer_work;
+static bool local_shell;
 
 static void switch_local_work_handler(struct k_work *work)
 {
-    uart_agent_stop(agent_dev);
-    shell_backend_uart_resume(&shell_cdc);
-    shell_start(&shell_cdc);
+    if (local_shell == false) {
+        local_shell = true;
+        uart_agent_stop(agent_dev);
+        shell_backend_uart_resume(&shell_cdc);
+        shell_start(&shell_cdc);
+    }
 }
 
 static void switch_peer_work_handler(struct k_work *work)
@@ -62,6 +66,7 @@ static void switch_peer_work_handler(struct k_work *work)
     k_msleep(10);
     shell_stop(&shell_cdc);
     uart_agent_start(agent_dev);
+    local_shell = false;
 }
 
 static void on_vuart_mode_set(const struct device *dev, void *user_data)
@@ -96,6 +101,7 @@ static int usb_shell_init(void)
         return -ENODEV;
     }
 
+    local_shell = true;
     k_work_init(&switch_local_work, switch_local_work_handler);
     k_work_init(&switch_peer_work, switch_peer_work_handler);
     uart_agent_callback_set(agent_dev, on_vuart_mode_set, NULL);
