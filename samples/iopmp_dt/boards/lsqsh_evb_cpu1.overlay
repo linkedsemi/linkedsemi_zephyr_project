@@ -155,8 +155,6 @@
     iopmp1: iopmp@40001000 {
         compatible = "linkedsemi,iopmp";
         reg = <0x40001000 DT_SIZE_K(1)>;
-        clocks = <IOPMP_CLOCK>;
-        resets = <IOPMP_RESET>;
         partitions = <&iopmp1_partitions>;
     };
 
@@ -164,8 +162,6 @@
     iopmp2: iopmp@40001400 {
         compatible = "linkedsemi,iopmp";
         reg = <0x40001400 DT_SIZE_K(1)>;
-        clocks = <IOPMP_CLOCK>;
-        resets = <IOPMP_RESET>;
         partitions = <&iopmp2_partitions>;
     };
 
@@ -173,8 +169,6 @@
     iopmp3: iopmp@40001800 {
         compatible = "linkedsemi,iopmp";
         reg = <0x40001800 DT_SIZE_K(1)>;
-        clocks = <IOPMP_CLOCK>;
-        resets = <IOPMP_RESET>;
         partitions = <&iopmp3_partitions>;
     };
 
@@ -182,8 +176,6 @@
     iopmp4: iopmp@40001C00 {
         compatible = "linkedsemi,iopmp";
         reg = <0x40001C00 DT_SIZE_K(1)>;
-        clocks = <IOPMP_CLOCK>;
-        resets = <IOPMP_RESET>;
         partitions = <&iopmp3_partitions>;
     };
 
@@ -191,8 +183,6 @@
     iopmp5: iopmp@40002000 {
         compatible = "linkedsemi,iopmp";
         reg = <0x40002000 DT_SIZE_K(1)>;
-        clocks = <IOPMP_CLOCK>;
-        resets = <IOPMP_RESET>;
         partitions = <&iopmp3_partitions>;
     };
 };
