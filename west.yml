@@ -15,6 +15,7 @@ manifest:
         name-allowlist:
           - fatfs
           - littlefs
+          - picolibc
     - name: LS_SDK
       revision: 5f76f727c6fb1ceba11ee24615397ba53c313bd2
       remote: linkedsemi
