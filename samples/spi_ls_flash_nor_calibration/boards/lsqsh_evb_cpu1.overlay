@@ -1,0 +1,16 @@
+&qspi2 {
+	status = "okay";
+	auto-wait-ready;
+	auto-wait-interval = <1000>;
+	timing-calibration-from-end;
+	timing-calibration-auto-detect-content-disable;
+	timing-calibration-data-len = <4096>;
+	//timing-calibration-per-block-len = <65536>;
+	flash2: flash2@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <DT_FREQ_M(50)>;
+		spi-max-buswidth = <4>;
+		status = "okay";
+	};
+};
