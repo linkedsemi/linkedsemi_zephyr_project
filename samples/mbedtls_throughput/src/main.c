@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-
+#include <platform.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys_clock.h>
 #include <zephyr/timing/timing.h>
@@ -29,6 +29,10 @@
 #if defined(CONFIG_MBEDTLS_SM4_LINKEDSEMI_HARDWARE_ALT)
 #include "mbedtls/sm4_alt.h"
 #endif
+#if defined(CONFIG_MBEDTLS_SM3_LINKEDSEMI_HARDWARE_ALT) || \
+    defined(CONFIG_MBEDTLS_SM3_LINKEDSEMI_OTBN_ALT)
+#include "mbedtls/sm3_alt.h"
+#endif
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 #include <zephyr/logging/log.h>
@@ -37,7 +41,11 @@ LOG_MODULE_REGISTER(main);
 #define SHA512_DIGEST_SIZE  64
 #define SHA256_DIGEST_SIZE  32
 #define SM3_DIGEST_SIZE     32
+#if CONFIG_SRAM_SIZE >= 512
 #define TEST_TOTAL_SIZE     KB(256)     /* 总数据量 */
+#else
+#define TEST_TOTAL_SIZE     KB(128)     /* 2os 仅 256KB SRAM，需留余量给堆/栈 */
+#endif
 
 __attribute__((aligned(32))) static uint8_t big_buffer[TEST_TOTAL_SIZE + 1];
 
@@ -336,11 +344,11 @@ static int test_mbedtls_sha512_unaligned(uint32_t step_size)
     return 0;
 }
 
-#if defined(CONFIG_MBEDTLS_SHA224_SHA256_SM3_LINKEDSEMI_HARDWARE_ALT) || \
-    defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
+#if defined(CONFIG_MBEDTLS_SM3_LINKEDSEMI_HARDWARE_ALT) || \
+    defined(CONFIG_MBEDTLS_SM3_LINKEDSEMI_OTBN_ALT)
 static int test_mbedtls_sm3(uint32_t step_size)
 {
-    mbedtls_sha256_context sm3;
+    mbedtls_sm3_context sm3;
     timing_t start_time, end_time;
     uint64_t total_cycles = 0;
     uint64_t total_bytes = 0;
@@ -412,7 +420,7 @@ static int test_mbedtls_sm3(uint32_t step_size)
 
 static int test_mbedtls_sm3_unaligned(uint32_t step_size)
 {
-    mbedtls_sha256_context sm3;
+    mbedtls_sm3_context sm3;
     timing_t start_time, end_time;
     uint64_t total_cycles = 0;
     uint64_t total_bytes = 0;
@@ -1634,8 +1642,8 @@ int main(void)
         test_mbedtls_sha512_unaligned(step_sizes[i]);
     }
 
-#if defined(CONFIG_MBEDTLS_SHA224_SHA256_SM3_LINKEDSEMI_HARDWARE_ALT) || \
-    defined(CONFIG_MBEDTLS_SHA256_SM3_LINKEDSEMI_OTBN_ALT)
+#if defined(CONFIG_MBEDTLS_SM3_LINKEDSEMI_HARDWARE_ALT) || \
+    defined(CONFIG_MBEDTLS_SM3_LINKEDSEMI_OTBN_ALT)
     printk("\nmbedtls SM3 throughput (total %d KB)\n", TEST_TOTAL_SIZE / 1024);
     printk("Step(KB)   Time(us)   MB/s\n");
     for (size_t i = 0; i < ARRAY_SIZE(step_sizes); i++) {
