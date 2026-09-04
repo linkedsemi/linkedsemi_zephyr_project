@@ -51,3 +51,7 @@ manifest:
       revision: 782a9da666b6e7703b28dee65499a8f1f456f2b5
       remote: upstream
       path: modules/lib/libmctp
+    - name: libspdm
+      revision: 3.8.2
+      url: https://github.com/DMTF/libspdm.git
+      path: modules/lib/libspdm

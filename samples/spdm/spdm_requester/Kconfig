@@ -1,0 +1,8 @@
+# Copyright 2026
+# SPDX-License-Identifier: Apache-2.0
+#
+# 与响应方例程相同：引入 USB 公共描述符和 Zephyr Kconfig。
+
+source "${ZEPHYR_BASE}/samples/subsys/usb/common/Kconfig.sample_usbd"
+
+source "Kconfig.zephyr"
