@@ -1,0 +1,17 @@
+# Twister 元数据：串口出现 "SPDM requester over MCTP over USB" 即启动成功。
+# 完整握手需要主机先跑 Python 响应端，CI 不会自动跑那一步。
+sample:
+  name: SPDM over MCTP USB Requester
+common:
+  tags:
+    - pmci
+    - mctp
+    - spdm
+  depends_on: usb_device
+tests:
+    sample.pmci.mctp.spdm_requester:
+    harness: console
+    harness_config:
+      type: one_line
+      regex:
+        - "SPDM requester over MCTP over USB"

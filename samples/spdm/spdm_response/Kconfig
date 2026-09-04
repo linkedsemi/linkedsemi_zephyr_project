@@ -1,0 +1,8 @@
+# Copyright 2026
+# SPDX-License-Identifier: Apache-2.0
+#
+# 引入 USB sample 公共描述符（VID/PID）和 Zephyr 全局 Kconfig。
+
+source "${ZEPHYR_BASE}/samples/subsys/usb/common/Kconfig.sample_usbd"
+
+source "Kconfig.zephyr"

@@ -1,0 +1,17 @@
+# Twister 元数据：CI 编过并在串口里等到下面这行，就算 sample 启动成功。
+# 真正的 SPDM 握手要插 USB 跑主机 Python，twister 默认环境做不到。
+sample:
+  name: SPDM over MCTP USB Responder
+common:
+  tags:
+    - pmci
+    - mctp
+    - spdm
+  depends_on: usb_device
+tests:
+    sample.pmci.mctp.spdm_response:
+    harness: console
+    harness_config:
+      type: one_line
+      regex:
+        - "SPDM over MCTP over USB"

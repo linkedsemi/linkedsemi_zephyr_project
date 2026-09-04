@@ -1,0 +1,4 @@
+name: zephyr-libspdm
+build:
+  cmake: .
+  kconfig: Kconfig
