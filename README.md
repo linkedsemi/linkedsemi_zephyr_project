@@ -27,10 +27,3 @@ $ west build -p always -b lsqsh_evb@1os/lsqsh/cpu1 zephyr/samples/hello_world
 ```
 $ west build -p always -b lsqsh_evb@1os/lsqsh/cpu1 linkedsemi_zephyr_project/samples/reboot
 ```
-
-SPDM over MCTP USB 例程：
-
-```
-$ west build -p always -b lsqsh_evb@1os/lsqsh/cpu1 linkedsemi_zephyr_project/samples/spdm/spdm_response
-$ west build -p always -b lsqsh_evb@1os/lsqsh/cpu1 linkedsemi_zephyr_project/samples/spdm/spdm_requester
-```
