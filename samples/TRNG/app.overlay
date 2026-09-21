@@ -1,0 +1,9 @@
+/ {
+	chosen {
+		zephyr-entropy = &trng0;
+	};
+};
+
+&trng0 {
+	status = "okay";
+};
