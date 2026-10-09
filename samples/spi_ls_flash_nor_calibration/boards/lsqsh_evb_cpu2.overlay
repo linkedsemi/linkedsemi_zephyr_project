@@ -7,9 +7,6 @@
 	status = "okay";
 	auto-wait-ready;
 	auto-wait-interval = <1000>;
-	timing-calibration-from-end;
-	timing-calibration-auto-detect-content-disable;
-	timing-calibration-data-len = <4096>;
 	flash2: flash2@0 {
 		compatible = "jedec,spi-nor";
 		reg = <0>;
